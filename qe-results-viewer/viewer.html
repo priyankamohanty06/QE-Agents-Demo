@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QE Results Viewer</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;padding:16px;background:#f7f7fb}
+    header{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+    .json-out{white-space:pre-wrap;background:#111;color:#e6ffed;padding:12px;border-radius:6px;overflow:auto;max-height:70vh}
+    select{padding:6px}
+    .note{font-size:0.9em;color:#444}
+  </style>
+</head>
+<body>
+  <header>
+    <h2>QE Results Viewer</h2>
+    <div class="note">Drop the viewer file in the same folder as the `qe-results-*` JSON files and open it in your browser, or serve the folder with `python -m http.server`.</div>
+  </header>
+
+  <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center">
+    <div>
+      <label>Select file: </label>
+      <select id="fileSelect">
+        <option value="execution-context.json">execution-context.json</option>
+        <option value="test-plan.json">test-plan.json>
+        <option value="defects.json">defects.json</option>
+      </select>
+    </div>
+
+    <div id="controls" style="display:flex;gap:8px;align-items:center">
+      <input id="search" placeholder="Search text or filter (severity:HIGH)" style="padding:6px;width:320px" />
+      <button id="loadBtn">Load</button>
+      <button id="rawBtn">Open raw</button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px">
+    <div style="flex:1">
+      <div id="output" class="json-out">Select a file and click Load.</div>
+    </div>
+    <div style="width:360px;background:#fff;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+      <h3 style="margin-top:0">Defect Viewer</h3>
+      <div style="margin-bottom:8px"><strong>Filter:</strong></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="severityBtn" data-sev="ALL">All</button>
+        <button class="severityBtn" data-sev="CRITICAL">CRITICAL</button>
+        <button class="severityBtn" data-sev="HIGH">HIGH</button>
+        <button class="severityBtn" data-sev="MEDIUM">MEDIUM</button>
+        <button class="severityBtn" data-sev="LOW">LOW</button>
+      </div>
+      <div style="margin-bottom:8px"><strong>Matches:</strong></div>
+      <div id="defectList" style="max-height:60vh;overflow:auto;border-top:1px dashed #eee;padding-top:8px"></div>
+      <div id="defectDetail" style="margin-top:12px;font-size:0.95em;color:#222"></div>
+    </div>
+  </div>
+
+  <script>
+    const out = document.getElementById('output');
+    const select = document.getElementById('fileSelect');
+    const loadBtn = document.getElementById('loadBtn');
+    const rawBtn = document.getElementById('rawBtn');
+    const searchInput = document.getElementById('search');
+    const defectList = document.getElementById('defectList');
+    const defectDetail = document.getElementById('defectDetail');
+
+    let currentJson = null;
+    let currentFile = null;
+
+    async function loadFile(name) {
+      out.textContent = 'Loading ' + name + ' ...';
+      try {
+        const res = await fetch(name);
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        const json = await res.json();
+        currentJson = json;
+        currentFile = name;
+        renderOutput(json);
+        if (name === 'defects.json') renderDefects(json);
+      } catch (e) {
+        out.textContent = 'Failed to load ' + name + '\n' + e;
+        defectList.innerHTML = '';
+        defectDetail.innerHTML = '';
+      }
+    }
+
+    function renderOutput(json) {
+      out.textContent = JSON.stringify(json, null, 2);
+    }
+
+    function renderDefects(data) {
+      defectList.innerHTML = '';
+      defectDetail.innerHTML = '';
+      if (!Array.isArray(data)) {
+        defectList.textContent = 'No defects array found';
+        return;
+      }
+      window._defects = data; // expose for debugging
+      const frag = document.createDocumentFragment();
+      data.forEach((d, idx) => {
+        const el = document.createElement('div');
+        el.style.padding = '8px';
+        el.style.borderBottom = '1px solid #f0f0f0';
+        el.style.cursor = 'pointer';
+        el.dataset.idx = idx;
+        el.innerHTML = `<div style="font-weight:600">[${d.severity}] ${d.title}</div><div style="font-size:0.85em;color:#666">ID: ${d.defectId} • Priority: ${d.priority} • Confidence: ${Math.round((d.confidenceScore||0)*100)}%</div>`;
+        el.addEventListener('click', () => showDetail(d));
+        frag.appendChild(el);
+      });
+      defectList.appendChild(frag);
+    }
+
+    function showDetail(d) {
+      defectDetail.innerHTML = `
+        <div style="font-weight:700">${d.title} (${d.defectId})</div>
+        <div style="margin-top:6px"><strong>Severity:</strong> ${d.severity} &nbsp; <strong>Priority:</strong> ${d.priority} &nbsp; <strong>Confidence:</strong> ${Math.round((d.confidenceScore||0)*100)}%</div>
+        <div style="margin-top:8px"><strong>Root Cause Hypothesis</strong><div style="margin-left:8px">${d.rootCauseAnalysis?d.rootCauseAnalysis.hypothesis:'N/A'}</div></div>
+        <div style="margin-top:8px"><strong>Investigation:</strong><div style="margin-left:8px">${d.rootCauseAnalysis?d.rootCauseAnalysis.recommendedInvestigation:'N/A'}</div></div>
+        <div style="margin-top:8px"><strong>Affected Tests:</strong> ${d.affectedTests||0} &nbsp; <strong>Flaky:</strong> ${d.flaky}</div>
+      `;
+    }
+
+    loadBtn.addEventListener('click', () => loadFile(select.value));
+    rawBtn.addEventListener('click', () => window.open(select.value, '_blank'));
+
+    // Severity filtering
+    document.querySelectorAll('.severityBtn').forEach(b => b.addEventListener('click', () => {
+      const sev = b.dataset.sev;
+      if (!window._defects) return;
+      const filtered = sev === 'ALL' ? window._defects : window._defects.filter(d => d.severity === sev);
+      renderDefects(filtered);
+    }));
+
+    // Search box: simple client-side filter for displayed JSON or defects
+    searchInput.addEventListener('keyup', (e) => {
+      const q = e.target.value.trim();
+      if (!q) {
+        if (currentJson && currentFile === 'defects.json') renderDefects(window._defects || currentJson);
+        return;
+      }
+      // severity:HIGH style filter
+      const severityKeywords = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+      const sevMatch = q.match(/severity:\s*(\w+)/i);
+      let sev = sevMatch ? sevMatch[1].toUpperCase() : null;
+      if (!sev && currentFile === 'defects.json' && severityKeywords.includes(q.toUpperCase())) {
+        sev = q.toUpperCase();
+      }
+      if (sev && currentFile === 'defects.json') {
+        const filtered = (window._defects || currentJson).filter(d => d.severity === sev || (d.priority && d.priority.toUpperCase().includes(sev)));
+        renderDefects(filtered);
+        return;
+      }
+      // fallback: search text in JSON output
+      if (currentJson) {
+        const s = JSON.stringify(currentJson).toLowerCase();
+        const idx = s.indexOf(q.toLowerCase());
+        if (idx !== -1) {
+          out.textContent = JSON.stringify(currentJson, null, 2);
+          // highlight not implemented; simple approach: show first 300 chars around match
+          const match = JSON.stringify(currentJson, null, 2).toLowerCase().indexOf(q.toLowerCase());
+        }
+      }
+    });
+  </script>
+</body>
+</html>

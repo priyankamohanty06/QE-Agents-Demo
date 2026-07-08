@@ -1,0 +1,28 @@
+[
+  {
+    "testId": "T-101",
+    "status": "PASSED",
+    "executionTimeMs": 124,
+    "retryCount": 0
+  },
+  {
+    "testId": "T-102",
+    "status": "PASSED",
+    "executionTimeMs": 131,
+    "retryCount": 0
+  },
+  {
+    "testId": "T-103",
+    "status": "PASSED",
+    "executionTimeMs": 142,
+    "retryCount": 0
+  },
+  {
+    "testId": "T-104",
+    "status": "FAILED",
+    "executionTimeMs": 166,
+    "retryCount": 1,
+    "flaky": false,
+    "notes": "Reproduced on retry; classified as stable failure"
+  }
+]

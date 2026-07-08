@@ -1,0 +1,47 @@
+[
+  {
+    "testId": "T-101",
+    "title": "Happy path order placement",
+    "class": "happy-path",
+    "data": {
+      "email": "demo@example.com",
+      "password": "StrongPass1",
+      "cardToken": "tok_abc123"
+    },
+    "expectedResult": "201 Created"
+  },
+  {
+    "testId": "T-102",
+    "title": "Reject empty email",
+    "class": "negative",
+    "data": {
+      "email": "",
+      "password": "StrongPass1",
+      "cardToken": "tok_abc123"
+    },
+    "expectedResult": "400 validation"
+  },
+  {
+    "testId": "T-103",
+    "title": "Reject weak password",
+    "class": "boundary",
+    "data": {
+      "email": "demo@example.com",
+      "password": "short",
+      "cardToken": "tok_abc123"
+    },
+    "expectedResult": "400 validation"
+  },
+  {
+    "testId": "T-104",
+    "title": "Empty coupon should not crash",
+    "class": "boundary",
+    "data": {
+      "email": "demo@example.com",
+      "password": "StrongPass1",
+      "cardToken": "tok_abc123",
+      "coupon": ""
+    },
+    "expectedResult": "well-formed response with no crash"
+  }
+]

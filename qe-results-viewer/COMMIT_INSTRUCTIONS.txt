@@ -1,0 +1,18 @@
+# Commit instructions
+
+To add the viewer to your local repo and push a branch:
+
+cd qe-agent-system
+git checkout -b add/qe-results-viewer
+mkdir -p qe-results-viewer
+# copy viewer.html and README.md into qe-results-viewer/
+cp path/to/viewer.html qe-results-viewer/
+cp path/to/README.md qe-results-viewer/
+
+# stage and commit
+git add qe-results-viewer
+git commit -m "Add QE results static viewer"
+
+git push -u origin add/qe-results-viewer
+
+Then open a pull request from the new branch.

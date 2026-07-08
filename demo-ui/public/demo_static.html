@@ -1,0 +1,405 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QE Agent Static Demo</title>
+  <style>
+    body{font-family:Segoe UI,Roboto,Arial;margin:16px;background:#f6f8fb}
+    textarea{width:100%;height:180px;padding:8px;font-family:monospace}
+    button{padding:8px 12px;margin-right:8px}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    .panel{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+    pre{background:#0b1220;color:#dfffe0;padding:12px;border-radius:6px;overflow:auto}
+    .small{font-size:0.9em;color:#555}
+    .download{margin-top:8px}
+  </style>
+</head>
+<body>
+  <h2>QE Agent Static Demo (no server required)</h2>
+  <div class="panel">
+    <p>Paste a Product Requirement Document (PRD) or API spec below and click <strong>Run Demo</strong>. This static demo will simulate an AI-powered QE workflow and produce downloadable JSON outputs and an interactive viewer.</p>
+    <textarea id="prd">User Authentication API v2.0
+- User registration
+- Login with username/password
+- JWT tokens
+- MFA via SMS
+</textarea>
+    <div style="margin-top:8px">
+      <button id="run">Run Demo (simulate)</button>
+      <button id="saveAll">Download JSONs</button>
+      <span id="status" style="margin-left:12px;color:#444"></span>
+    </div>
+  </div>
+
+  <h3>Results</h3>
+  <div class="row">
+    <div class="col panel">
+      <h4>Execution Context</h4>
+      <pre id="context">-</pre>
+    </div>
+    <div class="col panel">
+      <h4>Defects</h4>
+      <pre id="defects">-</pre>
+    </div>
+  </div>
+
+  <h3>Interactive Viewer</h3>
+  <div class="panel small">
+    <p>Use the viewer below to explore defects. It's fully client-side.</p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <select id="fileSelect"><option value="execution">execution-context</option><option value="plan">test-plan</option><option value="defects">defects</option></select>
+      <input id="search" placeholder="Search or filter (severity:HIGH)" style="padding:6px;width:320px" />
+      <button id="loadBtn">Load</button>
+      <button id="openRaw">Open raw</button>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1"><div id="output" style="white-space:pre-wrap;background:#111;color:#e6ffed;padding:12px;border-radius:6px;max-height:60vh;overflow:auto">Load a result to view.</div></div>
+      <div style="width:360px;background:#fff;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+        <h4 style="margin-top:0">Defect Viewer</h4>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <button class="severityBtn" data-sev="ALL">All</button>
+          <button class="severityBtn" data-sev="CRITICAL">CRITICAL</button>
+          <button class="severityBtn" data-sev="HIGH">HIGH</button>
+          <button class="severityBtn" data-sev="MEDIUM">MEDIUM</button>
+          <button class="severityBtn" data-sev="LOW">LOW</button>
+        </div>
+        <div id="defectList" style="max-height:40vh;overflow:auto;border-top:1px dashed #eee;padding-top:8px"></div>
+        <div id="defectDetail" style="margin-top:12px;font-size:0.95em;color:#222"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // simulate pipeline from PRD content
+  function simulate(prdText) {
+    const ts = Date.now();
+    const normalized = prdText.toLowerCase();
+
+    function parseFieldNames(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const fields = [];
+      let inFieldSection = false;
+
+      for (const line of lines) {
+        const cleaned = line.replace(/^[-*•]\s*/, '').trim();
+        if (/user can update/i.test(line) || /can update/i.test(line) || (/fields?/i.test(line) && /update|mandatory|validation/i.test(normalized))) {
+          inFieldSection = true;
+          continue;
+        }
+        if (inFieldSection && /^[-*•]/.test(line)) {
+          const parts = cleaned.split(/,|;/).map(p => p.trim()).filter(Boolean);
+          parts.forEach(part => {
+            if (part && !/^(when|a success|user|all mandatory|email address cannot be changed)/i.test(part) && part.split(' ').length <= 6) fields.push(part);
+          });
+          continue;
+        }
+        if (!inFieldSection && /^[A-Z][A-Za-z0-9 ]{2,40}$/.test(cleaned) && cleaned.split(' ').length <= 5 && !/(when|a success|user must|all mandatory|must contain)/i.test(cleaned)) {
+          fields.push(cleaned);
+        }
+      }
+
+      return Array.from(new Set(fields.map(field => field.replace(/\.$/, '').trim())));
+    }
+
+    function inferFeatureScenarios(text) {
+      const scenarios = [];
+      if (/user must be logged in|user is logged in|login/i.test(text)) {
+        scenarios.push({ title: 'Authentication state and login enforcement', priority: 'CRITICAL', type: 'Authentication', coverage: 'Security', qualityFocus: 'Access control' });
+      }
+      if (/user can update/i.test(text) || /update/i.test(text)) {
+        scenarios.push({ title: 'Editable profile update workflow', priority: 'HIGH', type: 'Workflow', coverage: 'Functional', qualityFocus: 'Data integrity' });
+      }
+      if (/email address cannot be changed/i.test(text)) {
+        scenarios.push({ title: 'Email immutability and audit behavior', priority: 'HIGH', type: 'Security', coverage: 'Validation', qualityFocus: 'Data integrity' });
+      }
+      if (/phone number must contain 10 digits/i.test(text)) {
+        scenarios.push({ title: 'Phone number format and boundary validation', priority: 'HIGH', type: 'Validation', coverage: 'Field Coverage', qualityFocus: 'Input validation' });
+      }
+      if (/all mandatory fields must be completed/i.test(text)) {
+        scenarios.push({ title: 'Mandatory field completion enforcement', priority: 'HIGH', type: 'Validation', coverage: 'Boundary', qualityFocus: 'Completion checks' });
+      }
+      if (/success message is displayed/i.test(text) || /profile updated successfully/i.test(text)) {
+        scenarios.push({ title: 'Success messaging and user confirmation flow', priority: 'MEDIUM', type: 'UX', coverage: 'Usability', qualityFocus: 'Feedback quality' });
+      }
+      if (/jwt|token/i.test(text)) {
+        scenarios.push({ title: 'Token lifecycle and session expiry behavior', priority: 'HIGH', type: 'Security', coverage: 'Authentication', qualityFocus: 'Session resilience' });
+      }
+      return scenarios;
+    }
+
+    const fields = parseFieldNames(prdText);
+    const fieldScenarios = fields.flatMap((field, index) => {
+      const scenarios = [];
+      const baseScenario = {
+        id: `TS-${String(index + 1).padStart(3, '0')}`,
+        title: `${field} validation and update behavior`,
+        priority: 'HIGH',
+        type: 'Field Validation',
+        coverage: 'Field Coverage',
+        qualityFocus: 'Input validation'
+      };
+      scenarios.push(baseScenario);
+
+      if (/email/i.test(field) && /email address cannot be changed/i.test(normalized)) {
+        scenarios.push({
+          id: `TS-${String(index + 11).padStart(3, '0')}`,
+          title: 'Email immutability and unauthorized change prevention',
+          priority: 'CRITICAL',
+          type: 'Security',
+          coverage: 'Validation',
+          qualityFocus: 'Data integrity'
+        });
+      }
+      if (/phone/i.test(field) || /number/i.test(field)) {
+        scenarios.push({
+          id: `TS-${String(index + 21).padStart(3, '0')}`,
+          title: `${field} boundary, format and invalid input handling`,
+          priority: 'HIGH',
+          type: 'Validation',
+          coverage: 'Boundary',
+          qualityFocus: 'Input robustness'
+        });
+      }
+      return scenarios;
+    });
+
+    const featureScenarios = inferFeatureScenarios(prdText).map((entry, index) => ({
+      id: `TS-${String(fields.length + index + 1).padStart(3, '0')}`,
+      ...entry
+    }));
+
+    const testScenarios = fieldScenarios.length > 0 ? [...fieldScenarios, ...featureScenarios] : (featureScenarios.length > 0 ? featureScenarios : [
+      { id: 'TS-001', title: 'General requirement sanity check', priority: 'MEDIUM', type: 'General', coverage: 'Functional', qualityFocus: 'Completeness' },
+      { id: 'TS-002', title: 'Boundary conditions and field validation', priority: 'HIGH', type: 'Validation', coverage: 'Boundary', qualityFocus: 'Input robustness' }
+    ]);
+
+    const coverageAreas = Array.from(new Set(testScenarios.map(s => s.coverage || s.type)));
+    const overallRisk = /critical|payment|security|login|authentication/i.test(normalized) || fields.some(f => /email|password|phone|address/i.test(f)) ? 'CRITICAL' : 'HIGH';
+    const riskRationale = fields.length > 0 ? `Focus on field validation, business rules, and data integrity for ${fields.join(', ')}.` : 'Focus on workflow correctness and requirement coverage.';
+    const coverageRationale = coverageAreas.length > 0 ? `Covers ${coverageAreas.join(', ')} to ensure quality across the main requirement areas.` : 'Covers end-to-end validation and boundary conditions.';
+    const qualitySummary = 'Emphasizes practical quality concerns: field robustness, security, usability feedback, and automation readiness.';
+
+    const plan = {
+      planId: `TP-${ts}`,
+      overallRisk,
+      riskRationale,
+      coverageRationale,
+      qualitySummary,
+      testScenarios,
+      coverageAreas
+    };
+
+    const generatedTests = plan.testScenarios.map((s, i) => ({
+      testId: `TEST-${i + 1}`,
+      testName: s.title,
+      framework: 'TestNG',
+      sanitizationStatus: 'SANITIZED',
+      qualityFocus: s.qualityFocus || 'Automation readiness',
+      plannedCoverage: s.coverage || 'Functional',
+      automationConfidence: s.priority === 'CRITICAL' ? 'LOW' : 'MEDIUM'
+    }));
+
+    const executionResults = generatedTests.map((t, i) => ({
+      testId: t.testId,
+      status: i === 0 ? 'PASSED' : (i === 1 ? 'FAILED' : (i % 2 === 0 ? 'PASSED' : 'FAILED')),
+      executionTimeMs: 80 + Math.round(Math.random() * 160),
+      note: t.qualityFocus === 'Data integrity' ? 'Requires regression verification after bugfix' : 'Standard execution observation'
+    }));
+
+    const defects = [];
+    if (/email address cannot be changed/i.test(normalized) || fields.some(f => /email/i.test(f))) {
+      defects.push({
+        defectId: `DEF-${ts % 1000}-E`,
+        title: 'Email change business rule conflict',
+        severity: 'CRITICAL',
+        priority: 'P0',
+        confidenceScore: 0.94,
+        affectedTests: 2,
+        flaky: false,
+        triageRecommendation: 'Verify change prevention logic and ensure immutable fields are enforced in both UI and API layers.',
+        developmentImpact: 'High - breaks data integrity and can allow unauthorized profile edits.',
+        rootCauseAnalysis: {
+          hypothesis: 'The field update service does not enforce immutability in the profile endpoint.',
+          recommendedInvestigation: 'Review backend validation and audit logging around profile updates.',
+          likelyComponents: ['Profile API', 'Update Service', 'Frontend form binding']
+        }
+      });
+    }
+    if (/phone number must contain 10 digits/i.test(normalized) || fields.some(f => /phone/i.test(f))) {
+      defects.push({
+        defectId: `DEF-${ts % 1000}-P`,
+        title: 'Phone format validation is incomplete',
+        severity: 'HIGH',
+        priority: 'P1',
+        confidenceScore: 0.82,
+        affectedTests: 1,
+        flaky: false,
+        triageRecommendation: 'Add strict digit count and format validation to the request layer and regression test invalid values.',
+        developmentImpact: 'Medium - allows invalid phone numbers and may cause downstream lookup failures.',
+        rootCauseAnalysis: {
+          hypothesis: 'Input validation currently accepts partial or incorrectly formatted phone values.',
+          recommendedInvestigation: 'Inspect field validation rules in both client and server code.',
+          likelyComponents: ['Form validation', 'API schema validator']
+        }
+      });
+    }
+    if (/user must be logged in|user is logged in|login|authentication/i.test(normalized)) {
+      defects.push({
+        defectId: `DEF-${ts % 1000}-A`,
+        title: 'Authentication authorization gap on profile update',
+        severity: 'CRITICAL',
+        priority: 'P0',
+        confidenceScore: 0.9,
+        affectedTests: 2,
+        flaky: true,
+        triageRecommendation: 'Confirm login requirements for every protected endpoint and add a regression test for unauthenticated requests.',
+        developmentImpact: 'High - security breach risk if unauthenticated updates are possible.',
+        rootCauseAnalysis: {
+          hypothesis: 'Route-level auth middleware may be bypassed for update operations.',
+          recommendedInvestigation: 'Review endpoint access control and session validation.',
+          likelyComponents: ['Auth middleware', 'Profile update endpoint']
+        }
+      });
+    }
+    if (/all mandatory fields must be completed/i.test(normalized)) {
+      defects.push({
+        defectId: `DEF-${ts % 1000}-M`,
+        title: 'Missing mandatory field enforcement',
+        severity: 'HIGH',
+        priority: 'P1',
+        confidenceScore: 0.78,
+        affectedTests: 1,
+        flaky: false,
+        triageRecommendation: 'Ensure required field validation is enforced before persistence and add negative tests for omitted mandatory values.',
+        developmentImpact: 'Medium - allows incomplete data and breaks business rules.',
+        rootCauseAnalysis: {
+          hypothesis: 'Client-side validation exists, but server-side required checks are incomplete.',
+          recommendedInvestigation: 'Audit validation logic in API controllers and database constraints.',
+          likelyComponents: ['Validation layer', 'Database schema']
+        }
+      });
+    }
+    if (defects.length === 0) {
+      defects.push({
+        defectId: `DEF-${ts % 1000}-G`,
+        title: 'General functional inconsistency uncovered',
+        severity: 'MEDIUM',
+        priority: 'P2',
+        confidenceScore: 0.7,
+        affectedTests: 1,
+        flaky: false,
+        triageRecommendation: 'Review uncovered edge cases and extend test coverage for user update scenarios.',
+        developmentImpact: 'Low - requires deeper coverage evaluation.',
+        rootCauseAnalysis: {
+          hypothesis: 'The current test plan has gaps in edge-case validation and workflow boundaries.',
+          recommendedInvestigation: 'Map requirements to existing scenarios and identify missing coverage.',
+          likelyComponents: ['Test plan', 'Requirements analysis']
+        }
+      });
+    }
+
+    const triageDefects = defects;
+    const executionContext = { contextId: `ctx-${ts}`, status: 'COMPLETED', testPlan: plan, generatedTests, executionResults, triageDefects, errorLog: [] };
+    return { executionContext, plan, triageDefects };
+  }
+
+  let lastResults = null;
+
+  document.getElementById('run').addEventListener('click', () => {
+    const prd = document.getElementById('prd').value;
+    document.getElementById('status').textContent = 'Running simulation...';
+    setTimeout(()=>{
+      lastResults = simulate(prd);
+      document.getElementById('context').textContent = JSON.stringify(lastResults.executionContext, null, 2);
+      document.getElementById('defects').textContent = JSON.stringify(lastResults.triageDefects, null, 2);
+      document.getElementById('status').textContent = 'Simulation complete';
+    }, 700);
+  });
+
+  document.getElementById('saveAll').addEventListener('click', () => {
+    if (!lastResults) { alert('Run demo first'); return; }
+    downloadJSON(lastResults.executionContext, `execution-context-${Date.now()}.json`);
+    downloadJSON(lastResults.plan, `test-plan-${Date.now()}.json`);
+    downloadJSON(lastResults.triageDefects, `defects-${Date.now()}.json`);
+  });
+
+  function downloadJSON(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // viewer
+  const loadBtn = document.getElementById('loadBtn');
+  const openRaw = document.getElementById('openRaw');
+  const select = document.getElementById('fileSelect');
+  const out = document.getElementById('output');
+  const defectList = document.getElementById('defectList');
+  const defectDetail = document.getElementById('defectDetail');
+
+  function renderOutput(obj) { out.textContent = JSON.stringify(obj, null, 2); }
+
+  function renderDefects(arr) {
+    defectList.innerHTML = '';
+    defectDetail.innerHTML = '';
+    if (!Array.isArray(arr)) { defectList.textContent = 'No defects'; return; }
+    arr.forEach((d,idx)=>{
+      const el = document.createElement('div');
+      el.style.padding='8px'; el.style.borderBottom='1px solid #f0f0f0'; el.style.cursor='pointer';
+      el.innerHTML = `<div style="font-weight:600">[${d.severity}] ${d.title}</div><div style="font-size:0.85em;color:#666">ID: ${d.defectId} • Priority: ${d.priority} • Confidence: ${Math.round((d.confidenceScore||0)*100)}%</div>`;
+      el.addEventListener('click', ()=> showDetail(d));
+      defectList.appendChild(el);
+    });
+  }
+  function showDetail(d){ defectDetail.innerHTML = `<div style="font-weight:700">${d.title} (${d.defectId})</div><div style="margin-top:6px"><strong>Severity:</strong> ${d.severity} &nbsp; <strong>Priority:</strong> ${d.priority} &nbsp; <strong>Confidence:</strong> ${Math.round((d.confidenceScore||0)*100)}%</div><div style="margin-top:8px"><strong>Developer Impact:</strong> ${d.developmentImpact||'N/A'}</div><div style="margin-top:8px"><strong>Triage Recommendation:</strong><div style="margin-left:8px">${d.triageRecommendation||'N/A'}</div></div><div style="margin-top:8px"><strong>Root Cause Hypothesis</strong><div style="margin-left:8px">${d.rootCauseAnalysis?d.rootCauseAnalysis.hypothesis:'N/A'}</div></div><div style="margin-top:8px"><strong>Investigation:</strong><div style="margin-left:8px">${d.rootCauseAnalysis?d.rootCauseAnalysis.recommendedInvestigation:'N/A'}</div></div><div style="margin-top:8px"><strong>Affected Tests:</strong> ${d.affectedTests||0} &nbsp; <strong>Flaky:</strong> ${d.flaky}</div>` }
+
+  loadBtn.addEventListener('click', ()=>{
+    const which = select.value;
+    if (!lastResults) { alert('Run demo first'); return; }
+    if (which==='execution') renderOutput(lastResults.executionContext);
+    if (which==='plan') renderOutput(lastResults.plan);
+    if (which==='defects') { renderOutput(lastResults.triageDefects); renderDefects(lastResults.triageDefects); }
+  });
+
+  document.querySelectorAll('.severityBtn').forEach(b=>b.addEventListener('click', ()=>{
+    const sev = b.dataset.sev;
+    if (!lastResults) return;
+    const arr = lastResults.triageDefects;
+    const filtered = sev==='ALL'?arr:arr.filter(d=>d.severity===sev);
+    renderDefects(filtered);
+  }));
+
+  document.getElementById('search').addEventListener('keyup', (e)=>{
+    const q = e.target.value.trim();
+    if (!lastResults) return;
+    if (!q) { renderOutput(lastResults.executionContext); renderDefects(lastResults.triageDefects); return; }
+    const sevMatch = q.match(/severity:\s*(\w+)/i);
+    if (sevMatch) {
+      const sev = sevMatch[1].toUpperCase();
+      const filtered = lastResults.triageDefects.filter(d=>d.severity===sev);
+      renderDefects(filtered);
+      return;
+    }
+    // fallback: search in stringified execution context
+    const s = JSON.stringify(lastResults.executionContext).toLowerCase();
+    const idx = s.indexOf(q.toLowerCase());
+    if (idx!==-1) {
+      renderOutput(lastResults.executionContext);
+    } else {
+      out.textContent = 'No match found.';
+    }
+  });
+
+  openRaw.addEventListener('click', ()=>{
+    const which = select.value; if (!lastResults) return alert('Run demo first');
+    const obj = which==='execution'? lastResults.executionContext : which==='plan'? lastResults.plan : lastResults.triageDefects;
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); window.open(url,'_blank');
+  });
+</script>
+</body>
+</html>

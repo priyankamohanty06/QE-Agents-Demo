@@ -1,0 +1,17 @@
+[
+  {
+    "defectId": "DEF-1",
+    "title": "Empty coupon flow triggers null handling bug",
+    "severity": "HIGH",
+    "priority": "P1",
+    "confidenceScore": 0.9,
+    "dedupeKey": "coupon-null-normalization",
+    "affectedTests": [
+      "T-104"
+    ],
+    "rootCauseAnalysis": {
+      "hypothesis": "Missing null guard during coupon normalization",
+      "recommendedInvestigation": "Inspect coupon parser and response serializer null-handling paths"
+    }
+  }
+]

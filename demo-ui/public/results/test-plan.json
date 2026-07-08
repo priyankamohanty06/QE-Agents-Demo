@@ -1,0 +1,29 @@
+{
+  "planId": "QE-PLAN-001",
+  "overallRisk": "HIGH",
+  "rationale": [
+    "Checkout path is revenue critical",
+    "Validation errors are explicitly specified in artifact",
+    "Idempotency is a high-risk regression area"
+  ],
+  "scenarios": [
+    {
+      "id": "SC-001",
+      "title": "Happy path checkout",
+      "priority": "P0",
+      "risk": "CRITICAL"
+    },
+    {
+      "id": "SC-002",
+      "title": "Validation and boundary behavior",
+      "priority": "P1",
+      "risk": "HIGH"
+    },
+    {
+      "id": "SC-003",
+      "title": "Duplicate submission handling",
+      "priority": "P1",
+      "risk": "HIGH"
+    }
+  ]
+}

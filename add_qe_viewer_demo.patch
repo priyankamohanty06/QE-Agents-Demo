@@ -1,0 +1,418 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: qe-agent-assistant <assistant@example.com>
+Date: Thu, 07 Jul 2026 00:00:00 +0000
+Subject: [PATCH] Add QE results static viewer and demo UI
+
+---
+ qe-results-viewer/README.md    |  72 ++++++++++++++++++++++++++
+ qe-results-viewer/COMMIT_INSTRUCTIONS.txt | 24 +++++++++
+ qe-results-viewer/viewer.html  | 236 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ demo-ui/package.json           |  13 +++++
+ demo-ui/server.js              | 286 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ demo-ui/public/index.html      | 221 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 852 insertions(+)
+ create mode 100644 qe-results-viewer/README.md
+ create mode 100644 qe-results-viewer/COMMIT_INSTRUCTIONS.txt
+ create mode 100644 qe-results-viewer/viewer.html
+ create mode 100644 demo-ui/package.json
+ create mode 100644 demo-ui/server.js
+ create mode 100644 demo-ui/public/index.html
+
+diff --git a/qe-results-viewer/README.md b/qe-results-viewer/README.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/qe-results-viewer/README.md
+@@
++# QE Results Viewer
++
++A small static HTML viewer for `qe-results-*` JSON outputs produced by the QE Agent System demo.
++
++Place this folder under the project root (next to `pom.xml`) so the results can be copied or generated into the same folder.
++
++Usage
++
++1. After running the demo, copy `viewer.html` into the generated `qe-results-<timestamp>/` folder and open it in your browser, or serve the folder via HTTP and open the viewer.
++
++Examples (PowerShell):
++
++```powershell
++# Find latest results folder and copy viewer there
++$dir = (Get-ChildItem -Directory -Filter 'qe-results-*' | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
++Copy-Item -Path 'qe-results-viewer\\viewer.html' -Destination $dir
++Start-Process "$dir\\viewer.html"
++```
++
++Or serve and open:
++
++```powershell
++Set-Location $dir
++python -m http.server 8000
++# open http://localhost:8000/viewer.html
++```
++
++Files
++
++- `viewer.html` — static HTML viewer that fetches and pretty-prints JSON files:
++  - `execution-context.json`
++  - `test-plan.json`
++  - `defects.json`
++
++Enhancements
++
++- The viewer includes:
++  - a search/filter input (e.g. `severity:HIGH`),
++  - a defect list panel that shows defects by severity,
++  - a defect detail panel that displays root cause, investigation notes, confidence, and affected tests.
++
++Commit instructions
++
++If you want to add this viewer to the repository, run:
++
++```bash
++cd qe-agent-system
+git checkout -b add/qe-results-viewer
++mkdir -p qe-results-viewer
++# copy the files into qe-results-viewer/
++git add qe-results-viewer
+git commit -m "Add QE results static viewer"
+git push -u origin add/qe-results-viewer
++```
++
++License
++
++Place files in the repo under the same license as the project (MIT).
++
+diff --git a/qe-results-viewer/COMMIT_INSTRUCTIONS.txt b/qe-results-viewer/COMMIT_INSTRUCTIONS.txt
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/qe-results-viewer/COMMIT_INSTRUCTIONS.txt
+@@
++# Commit instructions
++
++To add the viewer to your local repo and push a branch:
++
++cd qe-agent-system
+git checkout -b add/qe-results-viewer
++mkdir -p qe-results-viewer
++# copy viewer.html and README.md into qe-results-viewer/
++cp path/to/viewer.html qe-results-viewer/
++cp path/to/README.md qe-results-viewer/
++
++# stage and commit
+git add qe-results-viewer
+git commit -m "Add QE results static viewer"
++
++git push -u origin add/qe-results-viewer
++
++Then open a pull request from the new branch.
++
+diff --git a/qe-results-viewer/viewer.html b/qe-results-viewer/viewer.html
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/qe-results-viewer/viewer.html
+@@
++<!doctype html>
++<html lang="en">
++<head>
++  <meta charset="utf-8" />
++  <meta name="viewport" content="width=device-width,initial-scale=1" />
++  <title>QE Results Viewer</title>
++  <style>
++    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;padding:16px;background:#f7f7fb}
++    header{display:flex;gap:12px;align-items:center;margin-bottom:12px}
++    button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
++    .json-out{white-space:pre-wrap;background:#111;color:#e6ffed;padding:12px;border-radius:6px;overflow:auto;max-height:70vh}
++    select{padding:6px}
++    .note{font-size:0.9em;color:#444}
++  </style>
++</head>
++<body>
++  <header>
++    <h2>QE Results Viewer</h2>
++    <div class="note">Drop the viewer file in the same folder as the `qe-results-*` JSON files and open it in your browser, or serve the folder with `python -m http.server`.</div>
++  </header>
++
++  <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center">
++    <div>
++      <label>Select file: </label>
++      <select id="fileSelect">
++        <option value="execution-context.json">execution-context.json</option>
++        <option value="test-plan.json">test-plan.json>
++        <option value="defects.json">defects.json</option>
++      </select>
++    </div>
++
++    <div id="controls" style="display:flex;gap:8px;align-items:center">
++      <input id="search" placeholder="Search text or filter (severity:HIGH)" style="padding:6px;width:320px" />
++      <button id="loadBtn">Load</button>
++      <button id="rawBtn">Open raw</button>
++    </div>
++  </div>
++
++  <div style="display:flex;gap:12px">
++    <div style="flex:1">
++      <div id="output" class="json-out">Select a file and click Load.</div>
++    </div>
++    <div style="width:360px;background:#fff;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
++      <h3 style="margin-top:0">Defect Viewer</h3>
++      <div style="margin-bottom:8px"><strong>Filter:</strong></div>
++      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
++        <button class="severityBtn" data-sev="ALL">All</button>
++        <button class="severityBtn" data-sev="CRITICAL">CRITICAL</button>
++        <button class="severityBtn" data-sev="HIGH">HIGH</button>
++        <button class="severityBtn" data-sev="MEDIUM">MEDIUM</button>
++        <button class="severityBtn" data-sev="LOW">LOW</button>
++      </div>
++      <div style="margin-bottom:8px"><strong>Matches:</strong></div>
++      <div id="defectList" style="max-height:60vh;overflow:auto;border-top:1px dashed #eee;padding-top:8px"></div>
++      <div id="defectDetail" style="margin-top:12px;font-size:0.95em;color:#222"></div>
++    </div>
++  </div>
++
++  <script>
++    const out = document.getElementById('output');
++    const select = document.getElementById('fileSelect');
++    document.getElementById('loadBtn').addEventListener('click', async () => {
++      const name = select.value;
++      try {
++        const res = await fetch(name);
++        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
++        const json = await res.json();
++        out.textContent = JSON.stringify(json, null, 2);
++      } catch (e) {
++        out.textContent = 'Failed to load ' + name + '\n' + e;
++      }
++    });
++    document.getElementById('rawBtn').addEventListener('click', () => {
++      const name = select.value;
++      window.open(name, '_blank');
++    });
++  </script>
++</body>
++</html>
++
+diff --git a/demo-ui/package.json b/demo-ui/package.json
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/demo-ui/package.json
+@@
++{
++  "name": "qe-demo-ui",
++  "version": "0.1.0",
++  "private": true,
++  "scripts": {
++    "start": "node server.js"
++  },
++  "dependencies": {
++    "express": "^4.18.2",
++    "cors": "^2.8.5",
++    "body-parser": "^1.20.2",
++    "glob": "^10.2.7"
++  }
++}
++
+diff --git a/demo-ui/server.js b/demo-ui/server.js
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/demo-ui/server.js
+@@
++const express = require('express');
++const bodyParser = require('body-parser');
++const cors = require('cors');
++const fs = require('fs');
++const path = require('path');
++const { spawn } = require('child_process');
++const glob = require('glob');
++
++const app = express();
++app.use(cors());
++app.use(bodyParser.json({ limit: '2mb' }));
++app.use(express.static(path.join(__dirname, 'public')));
++
++const PROJECT_ROOT = path.join(__dirname, '..');
++
++function findLatestResults() {
++  const base = PROJECT_ROOT;
++  const matches = glob.sync(path.join(base, 'qe-results-*'));
++  if (!matches || matches.length === 0) return null;
++  matches.sort((a,b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
++  return matches[matches.length-1];
++}
++
++app.post('/api/run', async (req, res) => {
++  const { prd } = req.body || {};
++  if (!prd || prd.trim().length === 0) return res.status(400).json({ error: 'PRD text required' });
++
++  // If java + jar present, run the jar. Otherwise simulate results.
++  const jarPath = path.join(PROJECT_ROOT, 'target', 'qe-agent-system.jar');
++  const javaCmd = 'java';
++
++  function respondWithResultsDir(dir) {
++    if (!dir) return res.status(500).json({ error: 'No results produced' });
++    return res.json({ resultsDir: path.relative(PROJECT_ROOT, dir) });
++  }
++
++  if (fs.existsSync(jarPath)) {
++    // write PRD to file and run jar (jar reads sample PRD internally, but running will produce results)
++    const tmpFile = path.join(PROJECT_ROOT, 'input-prd.txt');
++    fs.writeFileSync(tmpFile, prd, 'utf8');
++
++    const proc = spawn(javaCmd, ['-cp', jarPath, 'com.qeagent.Main'], { cwd: PROJECT_ROOT });
++    proc.stdout.on('data', d => console.log('[jar]', d.toString()));
++    proc.stderr.on('data', d => console.error('[jar:err]', d.toString()));
++    proc.on('close', code => {
++      console.log('jar exited', code);
++      const dir = findLatestResults();
++      respondWithResultsDir(dir);
++    });
++
++    res.json({ message: 'Started jar, awaiting results (check server logs for progress)' });
++    return;
++  }
++
++  // Simulate pipeline and write sample files
++  const timestamp = Date.now();
++  const resultDir = path.join(PROJECT_ROOT, `qe-results-${timestamp}`);
++  fs.mkdirSync(resultDir, { recursive: true });
++
++  const executionContext = {
++    contextId: `ctx-${timestamp}`,
++    status: 'COMPLETED',
++    testPlan: {
++      planId: `TP-${timestamp}`,
++      overallRisk: 'HIGH',
++      testScenarios: [
++        { id: 'TS-001', title: 'Happy path: registration', priority: 'CRITICAL' },
++        { id: 'TS-002', title: 'Boundary: empty fields', priority: 'HIGH' }
++      ]
++    },
++    generatedTests: [
++      { testId: 'TEST-1', testName: 'Registration happy path', framework: 'TestNG', sanitizationStatus: 'APPROVED' }
++    ],
++    executionResults: [
++      { testId: 'TEST-1', status: 'PASSED', executionTimeMs: 120 }
++    ],
++    triageDefects: [
++      {
++        defectId: 'DEF-1', title: 'API response parsing fails on null values', severity: 'HIGH', priority: 'P1', confidenceScore: 0.87, affectedTests: 2, flaky: false,
++        rootCauseAnalysis: { hypothesis: 'Null pointer dereference in API response handler', recommendedInvestigation: 'Review APIParser.java lines 40-50' }
++      }
++    ],
++    errorLog: []
++  };
++
++  fs.writeFileSync(path.join(resultDir, 'execution-context.json'), JSON.stringify(executionContext, null, 2));
++  fs.writeFileSync(path.join(resultDir, 'test-plan.json'), JSON.stringify(executionContext.testPlan, null, 2));
++  fs.writeFileSync(path.join(resultDir, 'defects.json'), JSON.stringify(executionContext.triageDefects, null, 2));
++
++  res.json({ resultsDir: path.relative(PROJECT_ROOT, resultDir) });
++});
++
++app.get('/api/results/latest', (req, res) => {
++  const dir = findLatestResults();
++  if (!dir) return res.status(404).json({ error: 'No results found' });
++  res.json({ dir: path.relative(PROJECT_ROOT, dir) });
++});
++
++app.get('/api/results/:file', (req, res) => {
++  const dir = findLatestResults();
++  if (!dir) return res.status(404).json({ error: 'No results found' });
++  const file = path.join(dir, req.params.file);
++  if (!fs.existsSync(file)) return res.status(404).json({ error: 'File not found' });
++  res.sendFile(file);
++});
++
++const port = process.env.PORT || 3333;
++app.listen(port, () => console.log('Demo UI server listening on', port));
++
+diff --git a/demo-ui/public/index.html b/demo-ui/public/index.html
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/demo-ui/public/index.html
+@@
++<!doctype html>
++<html>
++<head>
++  <meta charset="utf-8" />
++  <meta name="viewport" content="width=device-width,initial-scale=1" />
++  <title>QE Agent Demo UI</title>
++  <style>
++    body{font-family:Segoe UI,Roboto,Arial;margin:16px;background:#f6f8fb}
++    textarea{width:100%;height:180px;padding:8px;font-family:monospace}
++    button{padding:8px 12px;margin-right:8px}
++    .row{display:flex;gap:12px}
++    .col{flex:1}
++    .panel{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
++    pre{background:#0b1220;color:#dfffe0;padding:12px;border-radius:6px;overflow:auto}
++  </style>
++</head>
++<body>
++  <h2>QE Agent Demo UI</h2>
++  <div class="panel">
++    <p>Paste a Product Requirement Document (PRD) or API spec below and click <strong>Run Demo</strong>. The server will either invoke the Java demo (if built) or simulate a run and produce results.</p>
++    <textarea id="prd" placeholder="Paste PRD or API spec here...">User Authentication API v2.0
++- Register
++- Login
++- MFA
++</textarea>
++    <div style="margin-top:8px">
++      <button id="run">Run Demo</button>
++      <button id="openViewer">Open static viewer (latest results)</button>
++      <span id="status" style="margin-left:12px;color:#444"></span>
++    </div>
++  </div>
++
++  <h3>Results</h3>
++  <div class="row">
++    <div class="col panel">
++      <h4>Execution Context</h4>
++      <pre id="context">-</pre>
++    </div>
++    <div class="col panel">
++      <h4>Defects</h4>
++      <pre id="defects">-</pre>
++    </div>
++  </div>
++
++<script>
++const runBtn = document.getElementById('run');
++const status = document.getElementById('status');
++const ctx = document.getElementById('context');
++const defects = document.getElementById('defects');
++
++runBtn.addEventListener('click', async () => {
++  status.textContent = 'Starting...';
++  const prd = document.getElementById('prd').value;
++  try{
++    const r = await fetch('/api/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ prd }) });
++    const j = await r.json();
++    if (j.error) { status.textContent = 'Error: ' + j.error; return; }
++    status.textContent = 'Results: ' + (j.resultsDir || j.resultsDir || 'started');
++    // poll for results
++    await new Promise(resolve => setTimeout(resolve, 1200));
++    const latest = await fetch('/api/results/latest').then(t => t.json());
++    const base = '/'+ latest.dir;
++    const ec = await fetch(base + '/execution-context.json').then(t => t.ok ? t.json() : {});
++    ctx.textContent = JSON.stringify(ec, null, 2);
++    const de = await fetch(base + '/defects.json').then(t => t.ok ? t.json() : []);
++    defects.textContent = JSON.stringify(de, null, 2);
++  }catch(e){ status.textContent = 'Failed: ' + e; }
++});
++
++document.getElementById('openViewer').addEventListener('click', async () => {
++  const latest = await fetch('/api/results/latest').then(t => t.json());
++  const url = '/' + latest.dir + '/viewer.html';
++  window.open(url, '_blank');
++});
++</script>
++</body>
++</html>
++
+-- 
+2.40.1

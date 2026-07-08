@@ -1,0 +1,109 @@
+{
+  "contextId": "ctx-demo-20260708",
+  "status": "COMPLETED",
+  "inputSummary": {
+    "artifactType": "PRD",
+    "requirementCount": 6,
+    "sanitized": true,
+    "promptInjectionBlocked": false
+  },
+  "testPlan": {
+    "planId": "QE-PLAN-001",
+    "overallRisk": "HIGH",
+    "goals": [
+      "Verify checkout and account creation",
+      "Catch validation regressions",
+      "Protect retry/idempotency behavior"
+    ],
+    "scenarios": [
+      {
+        "id": "SC-001",
+        "title": "Happy path checkout",
+        "risk": "CRITICAL",
+        "priority": "P0"
+      },
+      {
+        "id": "SC-002",
+        "title": "Validation and boundary behavior",
+        "risk": "HIGH",
+        "priority": "P1"
+      },
+      {
+        "id": "SC-003",
+        "title": "Duplicate submission handling",
+        "risk": "HIGH",
+        "priority": "P1"
+      }
+    ]
+  },
+  "generatedTests": [
+    {
+      "testId": "T-101",
+      "title": "Happy path order placement",
+      "class": "happy-path",
+      "expectedResult": "201 Created"
+    },
+    {
+      "testId": "T-102",
+      "title": "Reject empty email",
+      "class": "negative",
+      "expectedResult": "400 validation"
+    },
+    {
+      "testId": "T-103",
+      "title": "Reject weak password",
+      "class": "boundary",
+      "expectedResult": "400 validation"
+    },
+    {
+      "testId": "T-104",
+      "title": "Empty coupon should not crash",
+      "class": "boundary",
+      "expectedResult": "non-crash behavior"
+    }
+  ],
+  "executionResults": [
+    {
+      "testId": "T-101",
+      "status": "PASSED",
+      "executionTimeMs": 124
+    },
+    {
+      "testId": "T-102",
+      "status": "PASSED",
+      "executionTimeMs": 131
+    },
+    {
+      "testId": "T-103",
+      "status": "PASSED",
+      "executionTimeMs": 142
+    },
+    {
+      "testId": "T-104",
+      "status": "FAILED",
+      "executionTimeMs": 166,
+      "notes": "Null handling bug in coupon response path"
+    }
+  ],
+  "triageDefects": [
+    {
+      "defectId": "DEF-1",
+      "title": "Empty coupon flow triggers null handling bug",
+      "severity": "HIGH",
+      "priority": "P1",
+      "confidenceScore": 0.9,
+      "affectedTests": 1,
+      "flaky": false,
+      "rootCauseAnalysis": {
+        "hypothesis": "Missing null guard during coupon normalization",
+        "recommendedInvestigation": "Inspect coupon parsing and response serialization modules"
+      }
+    }
+  ],
+  "evaluation": {
+    "requirementCoverage": "4/6",
+    "falsePositiveRisk": "Low",
+    "triageAccuracyProxy": "High",
+    "maintainability": "High"
+  }
+}

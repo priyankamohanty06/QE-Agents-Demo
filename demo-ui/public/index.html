@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI QE Agent Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">AI-Powered QE Demo</p>
+        <h1>PRD to test plan, tests, execution, and triage</h1>
+        <p class="intro">A compact agent workflow that turns a product artifact into a risk-based plan, generated tests, simulated execution evidence, and actionable defects.</p>
+      </div>
+      <button id="runBtn">Run QE workflow</button>
+    </header>
+
+    <section class="grid two-up">
+      <div class="panel">
+        <h2>Input artifact</h2>
+        <textarea id="prdInput" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="sampleBtn" class="secondary">Load sample PRD</button>
+          <button id="downloadBtn" class="secondary">Download JSON</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Execution summary</h2>
+        <div id="summary" class="summary-box"></div>
+      </div>
+    </section>
+
+    <section class="grid three-up">
+      <article class="panel">
+        <h3>Test plan</h3>
+        <div id="planView" class="result-card"></div>
+      </article>
+      <article class="panel">
+        <h3>Generated tests</h3>
+        <div id="testsView" class="result-card"></div>
+      </article>
+      <article class="panel">
+        <h3>Triage defects</h3>
+        <div id="defectsView" class="result-card"></div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Reasoning trace</h2>
+      <div id="traceView" class="trace-box"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
