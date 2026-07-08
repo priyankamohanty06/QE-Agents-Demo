@@ -22,6 +22,16 @@ Option B: serve the folder with Python
   - `python -m http.server 8000 --directory demo-ui/public`
 - Open `http://localhost:8000/`
 
+## Deploy for demo (GitHub Pages)
+This repository includes an auto-deploy workflow for the UI.
+
+1. Push changes to the `main` branch.
+2. GitHub Actions runs `.github/workflows/deploy-demo-ui.yml`.
+3. Your public demo URL becomes:
+   - `https://priyankamohanty06.github.io/QE-Agents-Demo/`
+
+If it is your first Pages deployment, confirm in repository settings that Pages uses GitHub Actions.
+
 ## Generated outputs
 Sample results are stored under [demo-ui/public/results](demo-ui/public/results).
 

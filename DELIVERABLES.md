@@ -10,6 +10,10 @@ Use either option:
   - Run: `python -m http.server 8000 --directory demo-ui/public`
   - Open: `http://localhost:8000/`
 
+- Public hosted mode (recommended for interviews)
+  - Push to `main` and wait for GitHub Actions deployment.
+  - Open: `https://priyankamohanty06.github.io/QE-Agents-Demo/`
+
 ## 2) Source code + README
 - Main workflow UI: [demo-ui/public/index.html](demo-ui/public/index.html)
 - Agent logic: [demo-ui/public/app.js](demo-ui/public/app.js)
