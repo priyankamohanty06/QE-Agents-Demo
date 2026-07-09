@@ -1,87 +1,90 @@
-# Design Document: AI-Powered QE Agent System
+# Design Document: AI-Powered QE Agent Demo UI
 
 ## 1. Goal
-Create a working slice of an AI-powered Quality Engineering workflow that can take a PRD or API spec, produce a risk-based test plan, generate tests, execute them safely, and triage defects into actionable work items.
+Provide a clear front-end experience for the QE workflow that can:
+- accept a PRD or API spec,
+- visualize the four QE stages end to end,
+- expose execution artifacts and metrics in a demo-friendly format,
+- optionally connect to the Java backend service for real workflow execution.
 
-## 2. Architecture
-The workflow is implemented as a small agent graph with four stages:
+## 2. UI Architecture
+The repository now includes two complementary UI experiences.
 
-1. Test Planning Agent
-   - Reads an incoming PRD/spec
-   - Identifies critical flows, risky behaviors, and ambiguous areas
-   - Produces a risk-ranked test plan
+1. Main studio page: [demo-ui/public/index.html](demo-ui/public/index.html)
+   - Uses [demo-ui/public/app.js](demo-ui/public/app.js) and [demo-ui/public/styles.css](demo-ui/public/styles.css)
+   - Supports both PRD and API Spec sample inputs
+   - Shows explicit stage badges for planning, generation, execution, and triage
+   - Renders plan, tests, execution evidence, defects, metrics, and reasoning trace
 
-2. Test Generation Agent
-   - Converts the plan into concrete tests and test data
-   - Emphasizes happy-path, negative, boundary, and security-style cases
-   - Keeps tests maintainable rather than generating large volumes of low-value cases
+2. Backend-connected demo page: [demo-ui/public/demo_static.html](demo-ui/public/demo_static.html)
+   - Targets the Java backend workflow server on `http://127.0.0.1:8081`
+   - Displays a backend connected/disconnected badge in the page header
+   - Accepts LLM configuration, HITL controls, and backend URL overrides
+   - Falls back to local simulation when the backend is unavailable
 
-3. Test Execution Agent
-   - Executes tests in a sandboxed mode
-   - Uses deterministic replay rules and simulated test data
-   - Handles retries and flaky-test heuristics without destructive side effects
+The UI treats the workflow output as a single execution context with nested sections for planning, generation, execution, and triage.
 
-4. Defect Triage Agent
-   - Converts failures into defects with severity, priority, confidence, root cause hints, and deduplication
-   - Groups similar issues to avoid noise
+## 3. Interaction Model
+### Main studio page
+- Artifact type toggle: PRD vs API Spec
+- Sample loaders for both artifact types
+- Per-stage badge progression:
+  - Pending
+  - Running
+  - Completed
+- Result cards:
+  - Risk-based plan
+  - Generated tests and data
+  - Execution results
+  - Defect triage output
+  - Evaluation metrics
+  - Reasoning and tradeoffs
 
-The artifact flows through the system as a single execution context object with sections for plan, tests, results, and defects.
+### Backend-connected page
+- Backend URL input
+- Health polling and status badge
+- LLM mode/model/base URL/API key inputs
+- HITL mode and approval token inputs
+- Export and raw JSON viewing support
 
-## 3. Why this framework choice
-This demo uses a custom agent graph instead of a heavier framework such as LangGraph or AutoGen.
+## 4. Design Choices
+### Why keep a client-side simulation path
+- The demo stays usable without backend availability.
+- It is easier to present in interview/demo situations.
+- It keeps the UI independently testable.
 
-Why:
-- It is easy to explain in a demo
-- It runs without extra package installation
-- It is simple to adapt to real LLM providers later
-- It keeps the focus on the QE workflow rather than framework plumbing
+### Why add backend-first mode separately
+- The Java service has richer orchestration and defect triage behavior.
+- Keeping backend mode in a separate page avoids overloading the main studio with transport concerns.
+- It allows explicit visibility into backend health, HITL controls, and live/fallback behavior.
 
-If this were expanded into production, the same architecture could be moved onto LangGraph or OpenAI Agents SDK for orchestration and tool calling.
+### Why emphasize stage visibility
+- QE workflows are easier to trust when each stage is visible.
+- The stage badges make the pipeline understandable to non-engineering reviewers.
+- The metrics and trace panels help explain tradeoffs rather than only showing final JSON.
 
-## 4. Why these models
-For a working slice, the demo uses a deterministic heuristic engine by default.
+## 5. Safety and Trustworthiness
+- Inputs are sanitized before client-side simulation.
+- The UI does not perform destructive actions.
+- Backend mode surfaces failure and fallback status instead of hiding it.
+- Exported JSON keeps the workflow auditable.
+- Defect rendering explicitly shows owner, severity, priority, and confidence so triage is actionable.
 
-Preferred production model choice:
-- GPT-4.1-mini or equivalent for planning and triage because it balances cost, latency, and reasoning quality
-- A smaller model for test-case drafting if cost matters
-- A stronger model only for the triage stage where nuance matters
+## 6. QE Depth Demonstrated in the UI
+- Risk-based planning rather than flat test enumeration
+- Positive, negative, boundary, and retry-oriented scenarios
+- Execution evidence with retry/flaky visibility
+- Actionable defect output with ownership and root-cause hypothesis
+- Evaluation summary for coverage and triage quality
 
-The design is provider-agnostic so the same workflow can call Azure OpenAI, OpenAI, or Anthropic APIs via a thin adapter layer.
+## 7. What Changed in This Iteration
+- Added PRD/API-spec switching in the main studio page.
+- Added stage badges and richer summary panels.
+- Added execution and metrics sections to the main UI.
+- Added backend connection status, LLM controls, and HITL controls in the backend-connected page.
+- Improved exported execution context fidelity for downstream inspection.
 
-## 5. Safety and trustworthiness
-### Sandbox execution
-- Tests run in a mock/simulated environment rather than against production systems
-- No destructive writes or external payments are performed
-- Each execution includes a sandbox policy object
-
-### Prompt injection defense
-- PRDs are treated as untrusted input
-- The system strips obvious instruction-style content such as "ignore previous instructions"
-- Agent instructions are separated from input content
-- The planner is constrained to extract requirements, risks, and test ideas rather than execute arbitrary commands
-
-### Hallucination control
-- Each stage produces evidence-based reasoning and references the source requirement IDs
-- The system marks confidence levels for generated tests and defects
-- A human review checkpoint is included before anything is promoted to production test automation
-
-## 6. QE depth demonstrated
-The workflow intentionally focuses on quality over volume:
-- Risk-based planning rather than exhaustive test generation
-- Negative and boundary tests for validation failures
-- Realistic defect triage with severity, deduplication, and root cause hints
-- Handling ambiguity by surfacing assumptions and unresolved requirements
-
-## 7. Evaluation strategy
-The demo tracks simple proxy metrics:
-- Requirement coverage: number of key requirements covered by test cases
-- False positive rate: how often the triage stage marks a harmless issue as a defect
-- Triage usefulness: whether the defect summary contains enough information for the next engineer to act
-- Maintenance score: whether the generated test logic is readable and reusable
-
-## 8. What comes next
-- Replace the heuristic engine with a real LLM-backed agent loop
-- Add a repository of test data and fixture generation
-- Add actual API or UI automation for execution
-- Move the sandbox to a containerized environment
-- Add metrics dashboards for coverage and defect quality
+## 8. Next Steps
+- Unify the two UI modes behind a single polished shell if desired.
+- Add structured API response viewers for backend runs.
+- Add lightweight regression checks for front-end rendering and export behavior.

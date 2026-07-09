@@ -1,4 +1,4 @@
-const defaultPrd = `Product artifact: Checkout API
+const prdSample = `Product artifact: Checkout API
 - Users can create an account with email and password.
 - Customers may place an order using a card token and an optional coupon.
 - The API must reject empty email, password shorter than 8 characters, and missing shipping address.
@@ -7,73 +7,145 @@ const defaultPrd = `Product artifact: Checkout API
 - If a coupon code is empty, the API should not crash and should return a validation error.
 `;
 
+const apiSpecSample = `openapi: 3.0.0
+info:
+  title: Order API
+  version: 1.0.0
+paths:
+  /orders:
+    post:
+      summary: Create order
+      requestBody:
+        required: true
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation error
+        '422':
+          description: Invalid card token
+  /orders/{orderId}:
+    get:
+      summary: Get order by id
+      responses:
+        '200':
+          description: Success
+        '404':
+          description: Not found
+security:
+  - bearerAuth: []
+`;
+
 const prdInput = document.getElementById('prdInput');
+const artifactType = document.getElementById('artifactType');
 const runBtn = document.getElementById('runBtn');
-const sampleBtn = document.getElementById('sampleBtn');
+const samplePrdBtn = document.getElementById('samplePrdBtn');
+const sampleApiBtn = document.getElementById('sampleApiBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+
+const stagePlanning = document.getElementById('stagePlanning');
+const stageGeneration = document.getElementById('stageGeneration');
+const stageExecution = document.getElementById('stageExecution');
+const stageTriaging = document.getElementById('stageTriaging');
+
 const summaryBox = document.getElementById('summary');
 const planView = document.getElementById('planView');
 const testsView = document.getElementById('testsView');
+const executionView = document.getElementById('executionView');
 const defectsView = document.getElementById('defectsView');
+const metricsView = document.getElementById('metricsView');
 const traceView = document.getElementById('traceView');
 
-prdInput.value = defaultPrd;
+const stageMap = {
+  planning: stagePlanning,
+  generation: stageGeneration,
+  execution: stageExecution,
+  triaging: stageTriaging
+};
+
+prdInput.value = prdSample;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resetStageBadges() {
+  Object.values(stageMap).forEach((el) => {
+    el.className = 'stage-badge pending';
+    el.textContent = 'Pending';
+  });
+}
+
+function setStageStatus(stage, status) {
+  const el = stageMap[stage];
+  if (!el) return;
+
+  if (status === 'running') {
+    el.className = 'stage-badge running';
+    el.textContent = 'Running';
+    return;
+  }
+
+  if (status === 'done') {
+    el.className = 'stage-badge done';
+    el.textContent = 'Completed';
+  }
+}
 
 function sanitizeInput(text) {
   const normalized = text.trim().replace(/\s+/g, ' ');
   const blocked = ['ignore previous instructions', 'system prompt', 'override rules', 'act as admin'];
-  const cleaned = blocked.reduce((acc, item) => acc.replace(new RegExp(item, 'gi'), ''), normalized);
-  return cleaned;
+  return blocked.reduce((acc, item) => acc.replace(new RegExp(item, 'gi'), ''), normalized);
 }
 
 function extractRequirements(text) {
   const requirements = [];
   const lines = text.split(/\n|\./).filter(Boolean);
+
   lines.forEach((line, idx) => {
-    if (/must|should|reject|return|idempotent|create|place|customers|users/i.test(line)) {
+    if (/must|should|reject|return|idempotent|create|place|customers|users|responses|required|security/i.test(line)) {
       requirements.push({ id: `REQ-${idx + 1}`, text: line.trim() });
     }
   });
-  return requirements.slice(0, 7);
+
+  return requirements.slice(0, 10);
 }
 
-function buildPlan(requirements) {
-  const scenarios = [
-    {
-      id: 'SC-001',
-      title: 'Happy path checkout',
-      risk: 'CRITICAL',
-      reason: 'Covers monetization and primary user journey',
-      priority: 'P0'
-    },
-    {
-      id: 'SC-002',
-      title: 'Validation edge cases',
-      risk: 'HIGH',
-      reason: 'Protects against malformed input and empty optional fields',
-      priority: 'P1'
-    },
-    {
-      id: 'SC-003',
-      title: 'Duplicate and retry behavior',
-      risk: 'HIGH',
-      reason: 'Ensures idempotency and safe retries',
-      priority: 'P1'
-    }
-  ];
-
-  const reasoning = [
-    'The planner prioritizes checkout, validation, and retry risk because the PRD includes payment, identity, and idempotency requirements.',
-    'Boundary and negative tests receive equal weight to the happy path to avoid false confidence.',
-    'The plan intentionally avoids exhaustive volume and focuses on high-value scenarios that can reveal regressions quickly.'
-  ];
-
+function planTests(requirements, sourceType) {
   return {
     planId: 'QE-PLAN-001',
+    sourceType,
     overallRisk: 'HIGH',
-    goals: ['Verify core checkout flows', 'Catch validation regressions', 'Protect duplicate-submission behavior'],
-    scenarios,
-    reasoning,
+    coverageAreas: ['Core flow', 'Validation', 'Boundary behavior', 'Retry/idempotency', 'Error contracts'],
+    entryCriteria: ['Artifact parsed', 'Test environment available', 'Data fixtures ready'],
+    exitCriteria: ['Critical scenarios executed', 'No blocker defects open', 'Defect triage complete'],
+    ambiguities: [
+      'Expected behavior for empty coupon is partially ambiguous (validation vs ignore).',
+      'Owner mapping rules for defects should be confirmed per service team.'
+    ],
+    scenarios: [
+      {
+        id: 'SC-001',
+        title: 'Happy path checkout',
+        risk: 'CRITICAL',
+        reason: 'Revenue-critical primary flow',
+        priority: 'P0'
+      },
+      {
+        id: 'SC-002',
+        title: 'Validation and boundary failures',
+        risk: 'HIGH',
+        reason: 'Most likely source of regressions',
+        priority: 'P1'
+      },
+      {
+        id: 'SC-003',
+        title: 'Idempotent retry behavior',
+        risk: 'HIGH',
+        reason: 'Duplicate order risk and data integrity',
+        priority: 'P1'
+      }
+    ],
     requirementsCovered: requirements.length
   };
 }
@@ -82,202 +154,257 @@ function generateTests(plan) {
   const tests = [
     {
       testId: 'T-101',
-      title: 'Happy path order placement',
+      title: 'Create order happy path',
       class: 'happy-path',
+      scenarioId: 'SC-001',
       data: { email: 'demo@example.com', password: 'StrongPass1', cardToken: 'tok_abc123', coupon: '' },
-      expectedResult: '201 Created and order persisted',
-      oracle: 'Status code 201 and response contains order id'
+      expectedResult: '201 Created'
     },
     {
       testId: 'T-102',
       title: 'Reject empty email',
       class: 'negative',
+      scenarioId: 'SC-002',
       data: { email: '', password: 'StrongPass1', cardToken: 'tok_abc123' },
-      expectedResult: '400 validation error',
-      oracle: 'Validation error mentions email'
+      expectedResult: '400 validation error'
     },
     {
       testId: 'T-103',
-      title: 'Reject weak password',
+      title: 'Reject short password',
       class: 'boundary',
+      scenarioId: 'SC-002',
       data: { email: 'demo@example.com', password: 'short', cardToken: 'tok_abc123' },
-      expectedResult: '400 validation error',
-      oracle: 'Validation error mentions password length'
+      expectedResult: '400 validation error'
     },
     {
       testId: 'T-104',
-      title: 'Empty coupon should not crash',
-      class: 'boundary',
-      data: { email: 'demo@example.com', password: 'StrongPass1', cardToken: 'tok_abc123', coupon: '' },
-      expectedResult: '400 or 201 with no coupon error',
-      oracle: 'No server crash and response is well-formed'
+      title: 'Malformed card token handling',
+      class: 'negative',
+      scenarioId: 'SC-002',
+      data: { email: 'demo@example.com', password: 'StrongPass1', cardToken: 'bad' },
+      expectedResult: '422 invalid token'
     },
     {
       testId: 'T-105',
-      title: 'Duplicate submission is idempotent',
-      class: 'negative',
+      title: 'Duplicate submission remains idempotent',
+      class: 'boundary',
+      scenarioId: 'SC-003',
       data: { email: 'demo@example.com', password: 'StrongPass1', cardToken: 'tok_abc123' },
-      expectedResult: 'Same outcome on retry',
-      oracle: 'Duplicate order request returns the same order reference or a safe retry response'
+      expectedResult: 'Safe replay behavior'
     }
   ];
 
   return tests.map((test) => ({
     ...test,
-    generatedFrom: plan.scenarios[0].id,
-    maintainability: 'High, uses explicit assertions and realistic fixtures'
+    maintainability: 'Structured assertions and readable fixture data'
   }));
 }
 
 function executeTests(tests) {
-  const results = [];
   const sandboxPolicy = {
-    mode: 'simulated',
+    mode: 'sandboxed-simulated',
     externalCalls: 'disabled',
-    dataIsolation: 'isolated fixtures',
     retries: 1,
-    flakyHandling: 're-run once and mark suspect if outcome changes'
+    flakyDetection: 'rerun-on-failure',
+    artifactLogging: 'enabled'
   };
 
-  tests.forEach((test) => {
-    const status = test.testId === 'T-104' ? 'FAILED' : 'PASSED';
-    results.push({
+  const executionResults = tests.map((test) => {
+    const failed = test.testId === 'T-104';
+    return {
       testId: test.testId,
       title: test.title,
-      status,
-      executionTimeMs: 110 + Math.round(Math.random() * 60),
-      sandboxPolicy,
-      notes: status === 'FAILED' ? 'Simulated defect: empty coupon caused a null reference in the response formatter' : 'Execution completed in sandbox'
-    });
+      status: failed ? 'FAILED' : 'PASSED',
+      executionTimeMs: 95 + Math.round(Math.random() * 120),
+      retryCount: failed ? 1 : 0,
+      flaky: false,
+      logRef: `log-${test.testId.toLowerCase()}`,
+      notes: failed ? 'Reproduced on retry; classified as stable failure' : 'Executed safely in sandbox'
+    };
   });
 
-  return { results, sandboxPolicy };
+  return { executionResults, sandboxPolicy };
 }
 
 function triageDefects(executionResults) {
-  const failed = executionResults.filter((result) => result.status === 'FAILED');
-  const defects = failed.map((result, idx) => ({
+  const failed = executionResults.filter((item) => item.status === 'FAILED');
+
+  return failed.map((item, idx) => ({
     defectId: `DEF-${idx + 1}`,
-    title: `${result.title} surfaced a defect`,
+    title: `${item.title} failure in execution`,
     severity: 'HIGH',
     priority: 'P1',
+    classification: item.flaky ? 'Flaky' : 'Real Defect',
     confidenceScore: 0.9,
-    affectedTests: 1,
-    flaky: false,
+    clusterKey: 'token-validation-errors',
+    likelyOwner: 'Checkout API Team',
     rootCauseAnalysis: {
-      hypothesis: 'Null handling in the coupon response path',
-      recommendedInvestigation: 'Review coupon normalization and response serialization for empty values'
-    },
-    deduped: false
+      hypothesis: 'Missing token format validation guard before payment provider adapter call',
+      recommendedInvestigation: 'Inspect request validator and payment adapter input contract'
+    }
   }));
-
-  return defects;
 }
 
-function buildExecutionContext(prdText) {
-  const sanitized = sanitizeInput(prdText);
+function buildContext(inputText, sourceType) {
+  const sanitized = sanitizeInput(inputText);
   const requirements = extractRequirements(sanitized);
-  const plan = buildPlan(requirements);
-  const tests = generateTests(plan);
-  const execution = executeTests(tests);
-  const defects = triageDefects(execution.results);
+  const plan = planTests(requirements, sourceType);
+  const generatedTests = generateTests(plan);
+  const executionData = executeTests(generatedTests);
+  const triageDefects = triageDefects(executionData.executionResults);
 
   return {
     contextId: `ctx-${Date.now()}`,
     status: 'COMPLETED',
+    sourceType,
     inputSummary: {
-      artifactType: 'PRD',
-      requirementCount: requirements.length,
       sanitized: sanitized.length > 0,
-      promptInjectionBlocked: sanitized !== prdText
+      promptInjectionBlocked: sanitized !== inputText,
+      requirementCount: requirements.length
     },
     testPlan: plan,
-    generatedTests: tests,
-    executionResults: execution.results,
-    triageDefects: defects,
-    evaluation: {
-      requirementCoverage: `${Math.min(requirements.length, tests.length)}/${requirements.length}`,
-      falsePositiveRisk: 'Low',
-      triageAccuracyProxy: 'High',
-      maintainability: 'High'
-    },
+    generatedTests,
+    executionResults: executionData.executionResults,
+    triageDefects,
     safety: {
-      sandbox: execution.sandboxPolicy,
-      humanInTheLoop: 'Recommended before production rollout',
-      trustNotes: [
-        'The workflow uses explicit evidence and confidence scores.',
-        'Generated tests are reviewed for business meaning before automation.'
-      ]
+      sandboxPolicy: executionData.sandboxPolicy,
+      humanInTheLoop: 'Required before production rollout'
+    },
+    evaluation: {
+      coverage: `${Math.min(generatedTests.length, requirements.length)}/${requirements.length}`,
+      falsePositiveRisk: 'Low',
+      triageAccuracy: 'High (proxy)',
+      maintainability: 'High'
     },
     trace: [
       {
         stage: 'Planning',
-        reasoning: 'Focused on critical payment and validation flows because the PRD highlights financial impact and explicit edge conditions.',
-        tradeoffs: 'Preferred risk-based coverage over exhaustive test volume.'
+        reasoning: 'Prioritized risk-heavy user and payment paths and highlighted ambiguities for clarification.',
+        tradeoff: 'Focused on high-value coverage before exhaustive permutations.'
       },
       {
         stage: 'Generation',
-        reasoning: 'Produced a mix of happy-path, negative, boundary, and retry cases to keep the suite realistic and maintainable.',
-        tradeoffs: 'Kept the generated suite small enough for demo clarity.'
+        reasoning: 'Produced executable-style tests with negative and boundary emphasis.',
+        tradeoff: 'Limited test count for maintainability and fast feedback.'
       },
       {
         stage: 'Execution',
-        reasoning: 'Ran tests in a simulated sandbox with retries and isolated fixtures.',
-        tradeoffs: 'Used safe, non-destructive execution to avoid production side effects.'
+        reasoning: 'Ran in sandbox mode with retries and artifact capture.',
+        tradeoff: 'Safe simulation over full integration to prevent side effects during demo.'
       },
       {
-        stage: 'Triage',
-        reasoning: 'Converted the failing case into a defect with severity, priority, confidence, and root-cause hints.',
-        tradeoffs: 'Used one defect to demonstrate actionable triage without amplifying noise.'
+        stage: 'Triaging',
+        reasoning: 'Clustered failures and assigned severity, owner, and root-cause hints.',
+        tradeoff: 'Used deterministic ownership mapping for clarity.'
       }
     ]
   };
 }
 
-function renderContext(context) {
+function renderSummary(context) {
   summaryBox.innerHTML = `
     <div class="badge">Status: ${context.status}</div>
-    <div class="badge">Overall risk: ${context.testPlan.overallRisk}</div>
-    <div class="badge">Requirements: ${context.inputSummary.requirementCount}</div>
-    <p><strong>Coverage proxy:</strong> ${context.evaluation.requirementCoverage}</p>
-    <p><strong>Sandbox mode:</strong> ${context.safety.sandbox.mode}</p>
-    <p class="muted">${context.safety.trustNotes.join(' ')}</p>
+    <div class="badge">Risk: ${context.testPlan.overallRisk}</div>
+    <div class="badge">Source: ${context.sourceType}</div>
+    <p><strong>Requirements extracted:</strong> ${context.inputSummary.requirementCount}</p>
+    <p><strong>Coverage proxy:</strong> ${context.evaluation.coverage}</p>
+    <p><strong>Sandbox:</strong> ${context.safety.sandboxPolicy.mode}</p>
+    <p class="muted">Prompt injection blocked: ${context.inputSummary.promptInjectionBlocked ? 'Yes' : 'No trigger detected'}</p>
   `;
+}
 
+function renderPlan(plan) {
   planView.innerHTML = `
-    <p><strong>Plan ID:</strong> ${context.testPlan.planId}</p>
-    <p><strong>Goals:</strong> ${context.testPlan.goals.join(', ')}</p>
-    <ul>${context.testPlan.scenarios.map((s) => `<li><strong>${s.id}</strong> ${s.title} - ${s.risk} (${s.priority})</li>`).join('')}</ul>
-    <p class="muted">${context.testPlan.reasoning.join(' ')}</p>
+    <p><strong>Plan ID:</strong> ${plan.planId}</p>
+    <p><strong>Coverage Areas:</strong> ${plan.coverageAreas.join(', ')}</p>
+    <p><strong>Entry Criteria:</strong> ${plan.entryCriteria.join(' | ')}</p>
+    <p><strong>Exit Criteria:</strong> ${plan.exitCriteria.join(' | ')}</p>
+    <ul>${plan.scenarios.map((s) => `<li><strong>${s.id}</strong> ${s.title} - ${s.risk} (${s.priority})</li>`).join('')}</ul>
+    <p class="muted"><strong>Ambiguities:</strong> ${plan.ambiguities.join(' ')}</p>
   `;
+}
 
+function renderTests(tests) {
   testsView.innerHTML = `
-    <ul>${context.generatedTests.map((test) => `<li><strong>${test.testId}</strong> ${test.title} (${test.class})</li>`).join('')}</ul>
-    <p class="muted">Example data: ${JSON.stringify(context.generatedTests[0].data)}</p>
+    <ul>${tests.map((test) => `<li><strong>${test.testId}</strong> ${test.title} (${test.class})</li>`).join('')}</ul>
+    <p class="muted">Sample data fixture: ${JSON.stringify(tests[0].data)}</p>
   `;
+}
 
-  defectsView.innerHTML = `
-    <ul>${context.triageDefects.map((defect) => `<li><strong>${defect.defectId}</strong> ${defect.title} - ${defect.severity} / ${defect.priority}</li>`).join('')}</ul>
-    <p class="muted">${context.triageDefects.length ? context.triageDefects[0].rootCauseAnalysis.hypothesis : 'No defects triaged in this run.'}</p>
+function renderExecution(context) {
+  executionView.innerHTML = `
+    <p><strong>Policy:</strong> retries=${context.safety.sandboxPolicy.retries}, flakyDetection=${context.safety.sandboxPolicy.flakyDetection}</p>
+    <ul>${context.executionResults.map((r) => `<li><strong>${r.testId}</strong> ${r.status}, retry=${r.retryCount}, flaky=${r.flaky}</li>`).join('')}</ul>
+    <p class="muted">Artifacts logged for each execution run.</p>
   `;
+}
 
-  traceView.innerHTML = context.trace.map((step) => `
+function renderDefects(defects) {
+  defectsView.innerHTML = defects.length
+    ? `
+      <ul>${defects.map((d) => `<li><strong>${d.defectId}</strong> ${d.title} - ${d.severity}/${d.priority}</li>`).join('')}</ul>
+      <p><strong>Owner:</strong> ${defects[0].likelyOwner}</p>
+      <p class="muted">${defects[0].rootCauseAnalysis.hypothesis}</p>
+    `
+    : '<p class="muted">No defects found in this run.</p>';
+}
+
+function renderMetrics(context) {
+  metricsView.innerHTML = `
+    <p><strong>Coverage:</strong> ${context.evaluation.coverage}</p>
+    <p><strong>False positive risk:</strong> ${context.evaluation.falsePositiveRisk}</p>
+    <p><strong>Triage accuracy:</strong> ${context.evaluation.triageAccuracy}</p>
+    <p><strong>Maintainability:</strong> ${context.evaluation.maintainability}</p>
+  `;
+}
+
+function renderTrace(trace) {
+  traceView.innerHTML = trace.map((step) => `
     <div style="margin-bottom: 12px;">
       <strong>${step.stage}</strong>
       <div>${step.reasoning}</div>
-      <div class="muted">Tradeoff: ${step.tradeoffs}</div>
+      <div class="muted">Tradeoff: ${step.tradeoff}</div>
     </div>
   `).join('');
 }
 
-function runWorkflow() {
-  const context = buildExecutionContext(prdInput.value);
-  renderContext(context);
-  localStorage.setItem('qe-demo-context', JSON.stringify(context));
+async function runWorkflow() {
+  resetStageBadges();
+
+  setStageStatus('planning', 'running');
+  await delay(500);
+
+  const inputText = prdInput.value;
+  const sourceType = artifactType.value;
+  const context = buildContext(inputText, sourceType);
+
+  renderSummary(context);
+  renderPlan(context.testPlan);
+  setStageStatus('planning', 'done');
+
+  setStageStatus('generation', 'running');
+  await delay(500);
+  renderTests(context.generatedTests);
+  setStageStatus('generation', 'done');
+
+  setStageStatus('execution', 'running');
+  await delay(500);
+  renderExecution(context);
+  setStageStatus('execution', 'done');
+
+  setStageStatus('triaging', 'running');
+  await delay(500);
+  renderDefects(context.triageDefects);
+  renderMetrics(context);
+  renderTrace(context.trace);
+  setStageStatus('triaging', 'done');
+
+  localStorage.setItem('qe-demo-context', JSON.stringify(context, null, 2));
 }
 
-function downloadJson() {
-  const text = localStorage.getItem('qe-demo-context') || JSON.stringify(buildExecutionContext(prdInput.value), null, 2);
+function exportContext() {
+  const stored = localStorage.getItem('qe-demo-context');
+  const text = stored || JSON.stringify(buildContext(prdInput.value, artifactType.value), null, 2);
   const blob = new Blob([text], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -286,11 +413,17 @@ function downloadJson() {
   URL.revokeObjectURL(a.href);
 }
 
-runBtn.addEventListener('click', runWorkflow);
-sampleBtn.addEventListener('click', () => {
-  prdInput.value = defaultPrd;
-  runWorkflow();
+samplePrdBtn.addEventListener('click', () => {
+  artifactType.value = 'PRD';
+  prdInput.value = prdSample;
 });
-downloadBtn.addEventListener('click', downloadJson);
+
+sampleApiBtn.addEventListener('click', () => {
+  artifactType.value = 'API_SPEC';
+  prdInput.value = apiSpecSample;
+});
+
+runBtn.addEventListener('click', runWorkflow);
+downloadBtn.addEventListener('click', exportContext);
 
 runWorkflow();
