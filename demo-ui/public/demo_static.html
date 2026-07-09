@@ -767,6 +767,9 @@
 
     document.getElementById('context').textContent = JSON.stringify(lastResults.executionContext, null, 2);
     document.getElementById('defects').textContent = JSON.stringify(lastResults.triageDefects, null, 2);
+    select.value = 'defects';
+    renderOutput(lastResults.triageDefects);
+    renderDefects(lastResults.triageDefects);
   });
 
   document.getElementById('saveAll').addEventListener('click', () => {
@@ -794,11 +797,31 @@
 
   function renderOutput(obj) { out.textContent = JSON.stringify(obj, null, 2); }
 
+  function normalizeDefect(defect) {
+    const rootCauseAnalysis = defect.rootCauseAnalysis || defect.root_cause_analysis || null;
+    const testResults = defect.testResults || defect.test_results || defect.testResultIds || [];
+
+    return {
+      defectId: defect.defectId || defect.defect_id || 'UNKNOWN',
+      title: defect.title || 'Untitled defect',
+      severity: defect.severity || 'UNKNOWN',
+      priority: defect.priority || 'UNKNOWN',
+      owner: defect.owner || defect.assigned_to || defect.assignedTo || 'Unassigned',
+      confidenceScore: defect.confidenceScore ?? defect.confidence_score ?? 0,
+      developmentImpact: defect.developmentImpact || defect.development_impact || defect.description || 'N/A',
+      triageRecommendation: defect.triageRecommendation || defect.triage_notes || 'N/A',
+      rootCauseAnalysis,
+      affectedTests: defect.affectedTests || defect.affected_tests || (Array.isArray(testResults) ? testResults.length : 0),
+      flaky: defect.flaky ?? defect.is_flaky ?? false
+    };
+  }
+
   function renderDefects(arr) {
     defectList.innerHTML = '';
     defectDetail.innerHTML = '';
     if (!Array.isArray(arr)) { defectList.textContent = 'No defects'; return; }
-    arr.forEach((d,idx)=>{
+    if (arr.length === 0) { defectList.textContent = 'No defects'; return; }
+    arr.map(normalizeDefect).forEach((d,idx)=>{
       const el = document.createElement('div');
       el.style.padding='8px'; el.style.borderBottom='1px solid #f0f0f0'; el.style.cursor='pointer';
       el.innerHTML = `<div style="font-weight:600">[${d.severity}] ${d.title}</div><div style="font-size:0.85em;color:#666">ID: ${d.defectId} • Priority: ${d.priority} • Owner: ${d.owner || 'Unassigned'} • Confidence: ${Math.round((d.confidenceScore||0)*100)}%</div>`;
