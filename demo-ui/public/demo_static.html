@@ -591,109 +591,170 @@
     );
     const generatedTests = generationInvocation.payload;
 
-    const executionResults = generatedTests.map((t, i) => ({
-      testId: t.testId,
-      status: i === 0 ? 'PASSED' : (i === 1 ? 'FAILED' : (i % 2 === 0 ? 'PASSED' : 'FAILED')),
-      executionTimeMs: 80 + Math.round(Math.random() * 160),
-      note: t.qualityFocus === 'Data integrity' ? 'Requires regression verification after bugfix' : 'Standard execution observation'
-    }));
+    const riskSignals = {
+      auth: /auth|authentication|login|jwt|token|bearer|session/i.test(normalized),
+      validation: /required|mandatory|reject|invalid|min|max|length|format|schema|422|400/i.test(normalized),
+      readonly: /readonly|read-only|cannot be changed|immutable/i.test(normalized),
+      idempotency: /idempotent|duplicate|replay/i.test(normalized),
+      performance: /performance|latency|throughput|timeout|slow/i.test(normalized),
+      integration: /third[- ]party|provider|gateway|adapter|integration|downstream/i.test(normalized)
+    };
 
-    const defects = [];
-    if (/email address cannot be changed/i.test(normalized) || fieldNames.some(f => /email/i.test(f))) {
-      defects.push({
-        defectId: `DEF-${ts % 1000}-E`,
-        title: 'Email change business rule conflict',
-        severity: 'CRITICAL',
-        priority: 'P0',
-        owner: 'Identity Team',
-        confidenceScore: 0.94,
-        affectedTests: 2,
-        flaky: false,
-        triageRecommendation: 'Verify change prevention logic and ensure immutable fields are enforced in both UI and API layers.',
-        developmentImpact: 'High - breaks data integrity and can allow unauthorized profile edits.',
-        rootCauseAnalysis: {
-          hypothesis: 'The field update service does not enforce immutability in the profile endpoint.',
-          recommendedInvestigation: 'Review backend validation and audit logging around profile updates.',
-          likelyComponents: ['Profile API', 'Update Service', 'Frontend form binding']
-        }
-      });
+    function deterministicHash(text) {
+      let h = 0;
+      for (let i = 0; i < text.length; i++) {
+        h = ((h << 5) - h) + text.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h);
     }
-    if (/phone number must contain 10 digits/i.test(normalized) || fieldNames.some(f => /phone/i.test(f))) {
-      defects.push({
-        defectId: `DEF-${ts % 1000}-P`,
-        title: 'Phone format validation is incomplete',
-        severity: 'HIGH',
-        priority: 'P1',
-        owner: 'Profile API Team',
-        confidenceScore: 0.82,
-        affectedTests: 1,
-        flaky: false,
-        triageRecommendation: 'Add strict digit count and format validation to the request layer and regression test invalid values.',
-        developmentImpact: 'Medium - allows invalid phone numbers and may cause downstream lookup failures.',
-        rootCauseAnalysis: {
-          hypothesis: 'Input validation currently accepts partial or incorrectly formatted phone values.',
-          recommendedInvestigation: 'Inspect field validation rules in both client and server code.',
-          likelyComponents: ['Form validation', 'API schema validator']
-        }
-      });
+
+    function classifyFailure(test) {
+      const label = `${test.testName || ''} ${test.qualityFocus || ''} ${test.plannedCoverage || ''}`.toLowerCase();
+      if (/auth|login|token|session|unauthor/i.test(label)) return 'AUTHORIZATION';
+      if (/boundary|length|format|required|enum|validation|type/i.test(label)) return 'VALIDATION';
+      if (/readonly|immutable|integrity|update/i.test(label)) return 'DATA_INTEGRITY';
+      if (/idempotent|retry|duplicate|replay/i.test(label)) return 'IDEMPOTENCY';
+      if (/performance|timeout|latency|throughput/i.test(label)) return 'PERFORMANCE';
+      return 'FUNCTIONAL';
     }
-    if (/user must be logged in|user is logged in|login|authentication/i.test(normalized)) {
-      defects.push({
-        defectId: `DEF-${ts % 1000}-A`,
-        title: 'Authentication authorization gap on profile update',
-        severity: 'CRITICAL',
-        priority: 'P0',
-        owner: 'Security Platform Team',
-        confidenceScore: 0.9,
-        affectedTests: 2,
-        flaky: true,
-        triageRecommendation: 'Confirm login requirements for every protected endpoint and add a regression test for unauthenticated requests.',
-        developmentImpact: 'High - security breach risk if unauthenticated updates are possible.',
-        rootCauseAnalysis: {
-          hypothesis: 'Route-level auth middleware may be bypassed for update operations.',
-          recommendedInvestigation: 'Review endpoint access control and session validation.',
-          likelyComponents: ['Auth middleware', 'Profile update endpoint']
+
+    function defectTemplate(category) {
+      const templates = {
+        AUTHORIZATION: {
+          title: 'Authorization guard inconsistent across protected operations',
+          severity: 'CRITICAL',
+          priority: 'P0',
+          owner: 'Security Platform Team',
+          triageRecommendation: 'Verify authentication middleware, token validation, and endpoint-level authorization policies.',
+          developmentImpact: 'High - potential unauthorized access risk.',
+          rootCauseAnalysis: {
+            hypothesis: 'One or more write endpoints bypass auth middleware under specific request paths.',
+            recommendedInvestigation: 'Trace route auth decorators and session/token validation flow.',
+            likelyComponents: ['Auth middleware', 'API gateway policy', 'Protected endpoint handlers']
+          }
+        },
+        VALIDATION: {
+          title: 'Input validation contract mismatch detected',
+          severity: 'HIGH',
+          priority: 'P1',
+          owner: 'Validation Service Team',
+          triageRecommendation: 'Align request schema validation with documented constraints and add negative regression tests.',
+          developmentImpact: 'Medium - invalid payloads may pass or valid payloads may be rejected.',
+          rootCauseAnalysis: {
+            hypothesis: 'Validation rules are inconsistent between API schema and server-side business checks.',
+            recommendedInvestigation: 'Review DTO/schema constraints and request validation pipeline.',
+            likelyComponents: ['Schema validator', 'Controller validation', 'Error mapper']
+          }
+        },
+        DATA_INTEGRITY: {
+          title: 'Immutable/data-integrity business rule not consistently enforced',
+          severity: 'HIGH',
+          priority: 'P1',
+          owner: 'Profile API Team',
+          triageRecommendation: 'Enforce immutable field rules in service and persistence layers and add update-guard tests.',
+          developmentImpact: 'High - risks unauthorized or invalid data mutations.',
+          rootCauseAnalysis: {
+            hypothesis: 'Service-layer update mapping allows restricted fields in certain code paths.',
+            recommendedInvestigation: 'Audit update request mapping and persistence constraints.',
+            likelyComponents: ['Update service', 'Data mapper', 'Persistence layer']
+          }
+        },
+        IDEMPOTENCY: {
+          title: 'Idempotency behavior deviates on duplicate submissions',
+          severity: 'MEDIUM',
+          priority: 'P2',
+          owner: 'Order Processing Team',
+          triageRecommendation: 'Verify idempotency key handling and replay protection for duplicate requests.',
+          developmentImpact: 'Medium - duplicate operations may create inconsistent state.',
+          rootCauseAnalysis: {
+            hypothesis: 'Idempotency key cache or duplicate detection has race conditions.',
+            recommendedInvestigation: 'Inspect dedup cache TTL, request fingerprinting, and concurrent request handling.',
+            likelyComponents: ['Idempotency cache', 'Order service', 'Concurrency controls']
+          }
+        },
+        PERFORMANCE: {
+          title: 'Performance budget breached under expected request shape',
+          severity: 'MEDIUM',
+          priority: 'P2',
+          owner: 'Platform Reliability Team',
+          triageRecommendation: 'Profile slow path and optimize request validation and downstream calls.',
+          developmentImpact: 'Medium - increased latency can impact user experience.',
+          rootCauseAnalysis: {
+            hypothesis: 'Inefficient validation and downstream call retries increase response time.',
+            recommendedInvestigation: 'Review traces for hotspot handlers and retry policies.',
+            likelyComponents: ['Validation layer', 'Downstream client', 'Retry middleware']
+          }
+        },
+        FUNCTIONAL: {
+          title: 'Functional behavior does not match requirement expectations',
+          severity: 'MEDIUM',
+          priority: 'P2',
+          owner: 'QE Automation Team',
+          triageRecommendation: 'Map failing scenarios to requirement clauses and confirm expected behavior with product owners.',
+          developmentImpact: 'Low to medium - may cause inconsistent user-visible behavior.',
+          rootCauseAnalysis: {
+            hypothesis: 'Requirement interpretation drift between test cases and implementation behavior.',
+            recommendedInvestigation: 'Perform requirement-to-test and requirement-to-code traceability review.',
+            likelyComponents: ['Test plan', 'Business logic implementation']
+          }
         }
-      });
+      };
+      return templates[category] || templates.FUNCTIONAL;
     }
-    if (/all mandatory fields must be completed/i.test(normalized)) {
-      defects.push({
-        defectId: `DEF-${ts % 1000}-M`,
-        title: 'Missing mandatory field enforcement',
-        severity: 'HIGH',
-        priority: 'P1',
-        owner: 'Validation Service Team',
-        confidenceScore: 0.78,
-        affectedTests: 1,
-        flaky: false,
-        triageRecommendation: 'Ensure required field validation is enforced before persistence and add negative tests for omitted mandatory values.',
-        developmentImpact: 'Medium - allows incomplete data and breaks business rules.',
-        rootCauseAnalysis: {
-          hypothesis: 'Client-side validation exists, but server-side required checks are incomplete.',
-          recommendedInvestigation: 'Audit validation logic in API controllers and database constraints.',
-          likelyComponents: ['Validation layer', 'Database schema']
-        }
-      });
-    }
-    if (defects.length === 0) {
-      defects.push({
-        defectId: `DEF-${ts % 1000}-G`,
-        title: 'General functional inconsistency uncovered',
-        severity: 'MEDIUM',
-        priority: 'P2',
-        owner: 'QE Automation Team',
-        confidenceScore: 0.7,
-        affectedTests: 1,
-        flaky: false,
-        triageRecommendation: 'Review uncovered edge cases and extend test coverage for user update scenarios.',
-        developmentImpact: 'Low - requires deeper coverage evaluation.',
-        rootCauseAnalysis: {
-          hypothesis: 'The current test plan has gaps in edge-case validation and workflow boundaries.',
-          recommendedInvestigation: 'Map requirements to existing scenarios and identify missing coverage.',
-          likelyComponents: ['Test plan', 'Requirements analysis']
-        }
-      });
-    }
+
+    const signalCount = Object.values(riskSignals).filter(Boolean).length;
+    const fieldComplexity = Math.min(2, Math.floor(fieldSpecs.length / 4));
+    const failBudget = Math.min(3, Math.max(0, signalCount - 2 + fieldComplexity));
+
+    let usedFailures = 0;
+    const executionResults = generatedTests.map((t, i) => {
+      const hash = deterministicHash(`${normalized}|${t.testName}|${t.testId}|${i}`);
+      const shouldFail = usedFailures < failBudget && (hash % 7 === 0 || hash % 11 === 0);
+      if (shouldFail) usedFailures += 1;
+
+      return {
+        testId: t.testId,
+        status: shouldFail ? 'FAILED' : 'PASSED',
+        executionTimeMs: 90 + (hash % 140),
+        note: shouldFail
+          ? `Failure captured during ${classifyFailure(t).toLowerCase().replace('_', ' ')} checks`
+          : 'Scenario satisfied expected behavior in simulated execution'
+      };
+    });
+
+    const failedResults = executionResults.filter(r => r.status === 'FAILED');
+    const groupedFailures = new Map();
+
+    failedResults.forEach(result => {
+      const matchingTest = generatedTests.find(t => t.testId === result.testId) || {};
+      const category = classifyFailure(matchingTest);
+      if (!groupedFailures.has(category)) groupedFailures.set(category, []);
+      groupedFailures.get(category).push({ result, test: matchingTest });
+    });
+
+    const defects = Array.from(groupedFailures.entries()).map(([category, entries], idx) => {
+      const template = defectTemplate(category);
+      const confidenceSeed = deterministicHash(`${category}|${entries[0]?.result?.testId || idx}`) % 15;
+      const confidence = Math.min(0.96, 0.72 + (confidenceSeed / 100));
+      const flaky = entries.some(e => ((deterministicHash(`${e.result.testId}|flaky`) % 9) === 0));
+
+      return {
+        defectId: `DEF-${ts % 1000}-${String(idx + 1).padStart(2, '0')}`,
+        title: template.title,
+        severity: template.severity,
+        priority: template.priority,
+        owner: template.owner,
+        confidenceScore: Number(confidence.toFixed(2)),
+        affectedTests: entries.length,
+        flaky,
+        triageRecommendation: template.triageRecommendation,
+        developmentImpact: template.developmentImpact,
+        rootCauseAnalysis: template.rootCauseAnalysis,
+        failureCategory: category,
+        testResultIds: entries.map(e => e.result.testId)
+      };
+    });
 
     const triageInvocation = await invokeLlmOrFallback(
       'DEFECT_TRIAGING',
@@ -767,6 +828,9 @@
 
     document.getElementById('context').textContent = JSON.stringify(lastResults.executionContext, null, 2);
     document.getElementById('defects').textContent = JSON.stringify(lastResults.triageDefects, null, 2);
+    if (Array.isArray(lastResults.triageDefects) && lastResults.triageDefects.length === 0) {
+      statusEl.textContent = `${statusEl.textContent} - no defects detected for this run`;
+    }
     select.value = 'defects';
     renderOutput(lastResults.triageDefects);
     renderDefects(lastResults.triageDefects);
@@ -820,7 +884,7 @@
     defectList.innerHTML = '';
     defectDetail.innerHTML = '';
     if (!Array.isArray(arr)) { defectList.textContent = 'No defects'; return; }
-    if (arr.length === 0) { defectList.textContent = 'No defects'; return; }
+    if (arr.length === 0) { defectList.textContent = 'No defects detected in this run'; return; }
     arr.map(normalizeDefect).forEach((d,idx)=>{
       const el = document.createElement('div');
       el.style.padding='8px'; el.style.borderBottom='1px solid #f0f0f0'; el.style.cursor='pointer';
@@ -843,8 +907,8 @@
   document.querySelectorAll('.severityBtn').forEach(b=>b.addEventListener('click', ()=>{
     const sev = b.dataset.sev;
     if (!lastResults) return;
-    const arr = lastResults.triageDefects;
-    const filtered = sev==='ALL'?arr:arr.filter(d=>d.severity===sev);
+    const arr = (lastResults.triageDefects || []).map(normalizeDefect);
+    const filtered = sev==='ALL' ? arr : arr.filter(d => String(d.severity || '').toUpperCase() === sev);
     renderDefects(filtered);
   }));
 
@@ -855,7 +919,9 @@
     const sevMatch = q.match(/severity:\s*(\w+)/i);
     if (sevMatch) {
       const sev = sevMatch[1].toUpperCase();
-      const filtered = lastResults.triageDefects.filter(d=>d.severity===sev);
+      const filtered = (lastResults.triageDefects || [])
+        .map(normalizeDefect)
+        .filter(d => String(d.severity || '').toUpperCase() === sev);
       renderDefects(filtered);
       return;
     }
