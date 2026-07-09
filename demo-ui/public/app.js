@@ -251,7 +251,7 @@ function buildContext(inputText, sourceType) {
   const plan = planTests(requirements, sourceType);
   const generatedTests = generateTests(plan);
   const executionData = executeTests(generatedTests);
-  const triageDefects = triageDefects(executionData.executionResults);
+  const triagedDefects = triageDefects(executionData.executionResults);
 
   return {
     contextId: `ctx-${Date.now()}`,
@@ -265,7 +265,7 @@ function buildContext(inputText, sourceType) {
     testPlan: plan,
     generatedTests,
     executionResults: executionData.executionResults,
-    triageDefects,
+    triageDefects: triagedDefects,
     safety: {
       sandboxPolicy: executionData.sandboxPolicy,
       humanInTheLoop: 'Required before production rollout'
