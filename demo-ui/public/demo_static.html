@@ -756,26 +756,40 @@
       };
     });
 
-    // Keep a minimum triage artifact per run so the demo always has actionable output.
-    if (defects.length === 0) {
+    // Keep a minimum of two triage artifacts per run so the demo always shows multiple defects.
+    while (defects.length < 2) {
+      const seq = defects.length + 1;
+      const failedIds = failedResults.map(x => x.testId);
       defects.push({
-        defectId: `DEF-${ts % 1000}-OBS`,
-        title: 'Preventive quality observation for this execution',
-        severity: 'LOW',
-        priority: 'P3',
+        defectId: `DEF-${ts % 1000}-OBS${seq}`,
+        title: seq === 1
+          ? 'Preventive quality observation for this execution'
+          : 'Coverage expansion recommendation from triage',
+        severity: seq === 1 ? 'LOW' : 'MEDIUM',
+        priority: seq === 1 ? 'P3' : 'P2',
         owner: 'QE Automation Team',
-        confidenceScore: 0.68,
-        affectedTests: 0,
+        confidenceScore: seq === 1 ? 0.68 : 0.74,
+        affectedTests: failedIds.length,
         flaky: false,
-        triageRecommendation: 'No hard failures reproduced in this run. Expand negative and boundary datasets and rerun in backend mode for deeper signal.',
-        developmentImpact: 'Low - no immediate blocker observed, follow-up coverage expansion recommended.',
+        triageRecommendation: seq === 1
+          ? 'No hard failures reproduced in this run. Expand negative and boundary datasets and rerun in backend mode for deeper signal.'
+          : 'Add deeper auth, validation, and error-contract scenarios to increase defect discovery depth for this artifact.',
+        developmentImpact: seq === 1
+          ? 'Low - no immediate blocker observed, follow-up coverage expansion recommended.'
+          : 'Medium - uncovered edge paths may hide latent defects.',
         rootCauseAnalysis: {
-          hypothesis: 'Current execution passed all generated checks; remaining risk may be in uncovered edge paths.',
-          recommendedInvestigation: 'Increase scenario depth for error contracts, auth edges, and data-format boundaries.',
-          likelyComponents: ['Test data set', 'Boundary validations', 'Error-handling paths']
+          hypothesis: seq === 1
+            ? 'Current execution passed all generated checks; remaining risk may be in uncovered edge paths.'
+            : 'Scenario matrix is likely narrower than production traffic patterns.',
+          recommendedInvestigation: seq === 1
+            ? 'Increase scenario depth for error contracts, auth edges, and data-format boundaries.'
+            : 'Add more field constraints, invalid payload permutations, and state-transition cases.',
+          likelyComponents: seq === 1
+            ? ['Test data set', 'Boundary validations', 'Error-handling paths']
+            : ['Scenario generator', 'Validation rules', 'State transition logic']
         },
         failureCategory: 'PREVENTIVE',
-        testResultIds: []
+        testResultIds: failedIds
       });
     }
 
@@ -820,62 +834,54 @@
 
   let lastResults = null;
 
+  function buildSyntheticDefect(now, seq, failedIds) {
+    return {
+      defectId: `DEF-${now % 1000}-S${seq}`,
+      title: seq === 1
+        ? 'Execution failures require explicit triage mapping'
+        : 'Additional quality risk signal for this execution',
+      severity: seq === 1 ? 'MEDIUM' : 'LOW',
+      priority: seq === 1 ? 'P2' : 'P3',
+      owner: 'QE Automation Team',
+      confidenceScore: seq === 1 ? 0.76 : 0.69,
+      affectedTests: failedIds.length,
+      flaky: false,
+      triageRecommendation: seq === 1
+        ? 'Backend returned insufficient defect artifacts. Re-run triage mapping for failed tests with detailed owner/severity assignment.'
+        : 'Increase boundary and negative coverage to validate whether this signal becomes a reproducible defect.',
+      developmentImpact: seq === 1
+        ? 'Medium - failures exist and need ownership plus root-cause investigation.'
+        : 'Low - no blocker, but risk remains in uncovered flows.',
+      rootCauseAnalysis: {
+        hypothesis: seq === 1
+          ? 'Triage serialization or mapping produced incomplete defect output for failing tests.'
+          : 'Current run may not include enough edge permutations to surface additional defects.',
+        recommendedInvestigation: seq === 1
+          ? 'Inspect backend triage stage response and UI payload normalization.'
+          : 'Expand scenarios across auth, format validation, and state transitions, then rerun.',
+        likelyComponents: seq === 1
+          ? ['DefectTriageAgent', 'API response mapper', 'UI normalization']
+          : ['Scenario generator', 'Test data', 'Assertion rules']
+      },
+      failureCategory: seq === 1 ? 'TRIAGE_MAPPING' : 'PREVENTIVE',
+      testResultIds: failedIds
+    };
+  }
+
   function ensureDefectsForEachExecution(result) {
     if (!result) return result;
-    const defects = Array.isArray(result.triageDefects) ? result.triageDefects : [];
-    if (defects.length > 0) return { ...result, triageDefects: defects };
+    const defects = Array.isArray(result.triageDefects) ? [...result.triageDefects] : [];
 
     const executionResults = result.executionContext?.executionResults || [];
     const failed = executionResults.filter(r => r.status === 'FAILED');
+    const failedIds = failed.map(x => x.testId);
     const now = Date.now();
 
-    if (failed.length > 0) {
-      return {
-        ...result,
-        triageDefects: [{
-          defectId: `DEF-${now % 1000}-AUTO`,
-          title: 'Execution failures detected without explicit triage output',
-          severity: 'MEDIUM',
-          priority: 'P2',
-          owner: 'QE Automation Team',
-          confidenceScore: 0.76,
-          affectedTests: failed.length,
-          flaky: false,
-          triageRecommendation: 'Backend returned failed tests but no defect artifacts. Review triage agent output mapping and regenerate defect payloads.',
-          developmentImpact: 'Medium - failures exist and need ownership plus root-cause investigation.',
-          rootCauseAnalysis: {
-            hypothesis: 'Triage serialization or mapping produced an empty defect list for failing tests.',
-            recommendedInvestigation: 'Inspect backend triage stage response and UI payload normalization.',
-            likelyComponents: ['DefectTriageAgent', 'API response mapper', 'UI normalization']
-          },
-          failureCategory: 'TRIAGE_MAPPING',
-          testResultIds: failed.map(x => x.testId)
-        }]
-      };
+    while (defects.length < 2) {
+      defects.push(buildSyntheticDefect(now, defects.length + 1, failedIds));
     }
 
-    return {
-      ...result,
-      triageDefects: [{
-        defectId: `DEF-${now % 1000}-OBS`,
-        title: 'Preventive quality observation for this execution',
-        severity: 'LOW',
-        priority: 'P3',
-        owner: 'QE Automation Team',
-        confidenceScore: 0.67,
-        affectedTests: 0,
-        flaky: false,
-        triageRecommendation: 'No defects were emitted by backend or simulation for this run. Add additional negative and boundary scenarios to improve defect discovery.',
-        developmentImpact: 'Low - execution passed but requires deeper risk probing.',
-        rootCauseAnalysis: {
-          hypothesis: 'Current scenarios did not reproduce any defect condition in this run.',
-          recommendedInvestigation: 'Expand test matrix and rerun with stricter assertions.',
-          likelyComponents: ['Scenario generator', 'Test data', 'Assertion rules']
-        },
-        failureCategory: 'PREVENTIVE',
-        testResultIds: []
-      }]
-    };
+    return { ...result, triageDefects: defects };
   }
 
   document.getElementById('run').addEventListener('click', async () => {
