@@ -3,52 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI QE Agent Demo</title>
+  <title>AI QE Agent Studio</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">AI-Powered QE Demo</p>
-        <h1>PRD to test plan, tests, execution, and triage</h1>
-        <p class="intro">A compact agent workflow that turns a product artifact into a risk-based plan, generated tests, simulated execution evidence, and actionable defects.</p>
+        <p class="eyebrow">AI-Powered Quality Engineering</p>
+        <h1>From Product Artifact to Actionable Defects</h1>
+        <p class="intro">Paste a PRD or API spec and run one end-to-end agent workflow across test planning, test generation, sandbox execution, and defect triage.</p>
       </div>
-      <button id="runBtn">Run QE workflow</button>
+      <button id="runBtn">Run End-to-End Demo</button>
     </header>
 
-    <section class="grid two-up">
+    <section class="grid two-up top-grid">
       <div class="panel">
-        <h2>Input artifact</h2>
+        <div class="panel-head">
+          <h2>Input Artifact</h2>
+          <select id="artifactType" aria-label="Artifact type">
+            <option value="PRD">PRD</option>
+            <option value="API_SPEC">API Spec</option>
+          </select>
+        </div>
         <textarea id="prdInput" spellcheck="false"></textarea>
         <div class="actions">
-          <button id="sampleBtn" class="secondary">Load sample PRD</button>
-          <button id="downloadBtn" class="secondary">Download JSON</button>
+          <button id="samplePrdBtn" class="secondary">Load PRD Sample</button>
+          <button id="sampleApiBtn" class="secondary">Load API Sample</button>
+          <button id="downloadBtn" class="secondary">Export Context JSON</button>
         </div>
       </div>
+
       <div class="panel">
-        <h2>Execution summary</h2>
+        <h2>Pipeline Status</h2>
+        <div class="stage-list">
+          <div class="stage-row"><span>1. Test Planning</span><span id="stagePlanning" class="stage-badge pending">Pending</span></div>
+          <div class="stage-row"><span>2. Test Generation</span><span id="stageGeneration" class="stage-badge pending">Pending</span></div>
+          <div class="stage-row"><span>3. Test Execution</span><span id="stageExecution" class="stage-badge pending">Pending</span></div>
+          <div class="stage-row"><span>4. Defect Triaging</span><span id="stageTriaging" class="stage-badge pending">Pending</span></div>
+        </div>
         <div id="summary" class="summary-box"></div>
       </div>
     </section>
 
     <section class="grid three-up">
       <article class="panel">
-        <h3>Test plan</h3>
+        <h3>Test Plan (Risk-Based)</h3>
         <div id="planView" class="result-card"></div>
       </article>
       <article class="panel">
-        <h3>Generated tests</h3>
+        <h3>Generated Tests + Data</h3>
         <div id="testsView" class="result-card"></div>
       </article>
       <article class="panel">
-        <h3>Triage defects</h3>
+        <h3>Defect Triage Output</h3>
         <div id="defectsView" class="result-card"></div>
       </article>
     </section>
 
+    <section class="grid two-up">
+      <article class="panel">
+        <h3>Execution Results</h3>
+        <div id="executionView" class="result-card"></div>
+      </article>
+      <article class="panel">
+        <h3>Evaluation Metrics</h3>
+        <div id="metricsView" class="result-card"></div>
+      </article>
+    </section>
+
     <section class="panel">
-      <h2>Reasoning trace</h2>
+      <h2>Reasoning and Tradeoffs</h2>
       <div id="traceView" class="trace-box"></div>
     </section>
   </main>
