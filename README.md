@@ -53,6 +53,10 @@ This repository includes an auto-deploy workflow for the UI.
 
 If it is your first Pages deployment, confirm in repository settings that Pages uses GitHub Actions.
 
+If Pages has never been enabled for the repository, you have two options:
+- Enable Pages manually in GitHub repository settings and choose GitHub Actions as the source.
+- Or add a repository secret named `PAGES_ENABLEMENT_TOKEN` containing a Personal Access Token with repository admin/pages permissions so the workflow can enable Pages automatically.
+
 ## Generated outputs
 - Static sample outputs are stored under [demo-ui/public/results](demo-ui/public/results).
 - Live backend runs return execution context, test plan, generated tests, execution results, and triaged defects through the backend API.
