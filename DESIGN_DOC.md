@@ -1,5 +1,8 @@
 # Design Document: AI-Powered QE Agent Demo UI
-
+Version: 1.1
+Date: July 10, 2026
+Author: Priyanka Mohanty
+Status: Complete & Demonstrated
 ## 1. Goal
 Provide a clear front-end experience for the QE workflow that can:
 - accept a PRD or API spec,
@@ -26,8 +29,8 @@ The UI treats the workflow output as a single execution context with nested sect
 
 ## 3. Interaction Model
 ### Main studio page
-- Artifact type toggle: PRD vs API Spec
-- Sample loaders for both artifact types
+- Artifact type: PRD , API Spec, User story
+- Sample loaders for all artifact types
 - Per-stage badge progression:
   - Pending
   - Running
