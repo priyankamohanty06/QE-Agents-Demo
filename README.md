@@ -3,7 +3,7 @@
 This repository contains the browser UI for the QE Agent demo. It now supports both a fully client-side walkthrough and a backend-connected demo experience that can call the Java workflow service running on port 8081.
 
 ## What is included
-- A polished end-to-end studio UI for PRD and API-spec driven QE walkthroughs
+- A polished end-to-end studio UI for PRD,User story and API-spec driven QE walkthroughs
 - A backend-connected demo page for invoking the Java workflow service
 - A lightweight JavaScript simulation flow for offline/demo fallback runs
 - A design document describing UI architecture, safety boundaries, and tradeoffs
@@ -12,7 +12,7 @@ This repository contains the browser UI for the QE Agent demo. It now supports b
 ## UI entry points
 - [demo-ui/public/index.html](demo-ui/public/index.html)
   - Main studio experience
-  - Supports PRD and API Spec sample inputs
+  - Supports PRD,user story and API Spec sample inputs
   - Shows per-stage pipeline status, risk-based plan, generated tests, execution results, defect triage, and evaluation metrics
   - Uses [demo-ui/public/app.js](demo-ui/public/app.js) and [demo-ui/public/styles.css](demo-ui/public/styles.css)
 
@@ -22,7 +22,7 @@ This repository contains the browser UI for the QE Agent demo. It now supports b
   - Includes LLM mode inputs, HITL controls, backend URL field, health badge, and local simulation fallback if the backend is unavailable
 
 ## Demo flow
-1. Paste a PRD or API spec into the UI.
+1. Paste a PRD or API spec or user story into the UI.
 2. Run the QE workflow.
 3. Review the risk-based test plan.
 4. Inspect generated tests and execution evidence.
