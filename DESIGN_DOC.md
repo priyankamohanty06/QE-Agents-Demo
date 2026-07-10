@@ -5,7 +5,7 @@ Author: Priyanka Mohanty
 Status: Complete & Demonstrated
 ## 1. Goal
 Provide a clear front-end experience for the QE workflow that can:
-- accept a PRD or API spec,
+- accept a PRD or API spec or user story,
 - visualize the four QE stages end to end,
 - expose execution artifacts and metrics in a demo-friendly format,
 - optionally connect to the Java backend service for real workflow execution.
@@ -15,7 +15,7 @@ The repository now includes two complementary UI experiences.
 
 1. Main studio page: [demo-ui/public/index.html](demo-ui/public/index.html)
    - Uses [demo-ui/public/app.js](demo-ui/public/app.js) and [demo-ui/public/styles.css](demo-ui/public/styles.css)
-   - Supports both PRD and API Spec sample inputs
+   - Supports both PRD,user story and API Spec sample inputs
    - Shows explicit stage badges for planning, generation, execution, and triage
    - Renders plan, tests, execution evidence, defects, metrics, and reasoning trace
 
